@@ -33,25 +33,17 @@ int main(int argc, char **argv) {
 
     int chunk = (n+1) / numprocs;
     double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
-    double* locald = init_locald(n, rank, numprocs, chunk);
-    double* localg = init_localg(n, locald, rank, chunk);
+    d_struct* locald;
+    locald = init_locald(n, rank, numprocs, chunk);
+    double* localg = init_localg(n, locald->locald, rank, chunk);
     //print_local2dmesh(n, localu, rank, chunk);
     //putchar('\n');
-    //print_local2dmesh(n, locald, rank, numprocs, chunk);
+    print_local2dmesh(chunk, n+1, locald->locald, rank);
     //putchar('\n');
-    print_local2dmesh(n, localg, rank, numprocs, chunk);
+    //print_local2dmesh(chunk, n+1, localg, rank);
     double q0;
-    //dot(chunk*(n+1), localg, localg, MPI_COMM_WORLD, &q0);
-    dot(n, localg, localg, rank, chunk, MPI_COMM_WORLD, &q0);
+    dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
     printf("[RANK %d] q0 = %lf\n", rank, q0);
-
-    //double* u = (double*) calloc(N,sizeof(double));
-    //double* d = init_d(n);
-    //double* g = init_g(n, d);
-    //double* q = (double*) malloc(N*sizeof(double));
-    //double* tau_d = (double*) malloc(N*sizeof(double));
-    ////print_2dmesh(n, d);
-    ////print_2dmesh(n, g);
 
     //int i;
     //double error = 999;

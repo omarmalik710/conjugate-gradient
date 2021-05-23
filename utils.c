@@ -4,50 +4,49 @@
 #include <math.h>
 #include "utils.h"
 
-double* init_locald(int n, int rank, int numprocs, int chunk) {
-    double h = (double) 1 / n;
+//double* init_locald(int n, int rank, int numprocs, int chunk) {
+d_struct* init_locald(int n, int rank, int numprocs, int chunk) {
 
+    d_struct* locald = (d_struct*) malloc(sizeof(d_struct));
+    locald->locald = (double*) malloc(chunk*(n+1)*sizeof(double));
     // Set different start and end points depending on rank. Ghost
     // values from neighbors will fill the rest (in another function).
-    double* d;
     double istart, iend;
     if ( rank==0 ) {
-        d = (double*) calloc((chunk+1)*(n+1),sizeof(double));
-        istart = 0;
-        iend = chunk;
+        locald->top_pad = NULL;
+        locald->bottom_pad = (double*) calloc(n+1,sizeof(double));
     }
     else if ( rank==(numprocs-1) ) {
-        d = (double*) calloc((chunk+1)*(n+1),sizeof(double));
-        istart = 1;
-        iend = chunk+1;
+        locald->top_pad = (double*) calloc(n+1,sizeof(double));
+        locald->bottom_pad = NULL;
     }
     else {
-        d = (double*) calloc((chunk+2)*(n+1),sizeof(double));
-        istart = 1;
-        iend = chunk+1;
+        locald->top_pad = (double*) calloc(n+1,sizeof(double));
+        locald->bottom_pad = (double*) calloc(n+1,sizeof(double));
     }
 
     // Initialize local d. No need to optimize this, since it's
     // only done once (at the start of the program).
     int i,j;
     double xi, yj;
-    for (i=istart; i<iend; ++i) {
-        xi = ((i-istart)+rank*chunk)*h;
+    double h = (double) 1 / n;
+    for (i=0; i<chunk; ++i) {
+        xi = (i+rank*chunk)*h;
         for (j=0; j<(n+1); ++j) {
             yj = j*h;
             // Account for boundary conditions.
             //if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
-            if ((rank==0 && i==istart) || (rank==(numprocs-1) && i==chunk) || j==0 || j==n) {
-                d[i*(n+1)+j] = 0.0;
+            if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
+                locald->locald[i*(n+1)+j] = 0.0;
             }
             else {
-                d[i*(n+1)+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
+                locald->locald[i*(n+1)+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
             }
 
         }
     }
 
-    return d;
+    return locald;
 }
 
 void exchange_boundaries(int n, double* d, int rank, int numprocs, int chunk) {
@@ -101,31 +100,20 @@ void exchange_boundaries(int n, double* d, int rank, int numprocs, int chunk) {
 double* init_localg(int n, double* d, int rank, int chunk) {
     double* g = (double*) malloc(chunk*(n+1)*sizeof(double));
 
-    // Set different start and end points depending on rank. Ghost
-    // values from neighbors will fill the rest (in another function).
-    int istart;
-    if ( rank==0 ) { istart = 0; }
-    else { istart = 1; }
-
     // Initialize g. No need to optimize this, since it's
     // only done once (at the start of the program).
     for (int i=0; i<chunk; ++i) {
         for (int j=0; j<(n+1); ++j) {
-            g[i*(n+1)+j] = -d[(i+istart)*(n+1)+j];
+            g[i*(n+1)+j] = -d[i*(n+1)+j];
         }
     }
     return g;
 }
 
-void print_local2dmesh(int n, double* mesh, int rank, int numprocs, int chunk) {
-    int istart = 0;
-    int iend;
-    if ( rank==0 || rank==(numprocs-1) ) { iend = chunk+1; }
-    else { iend = chunk+2; }
-
-    for (int i=istart; i<iend; ++i) {
-        for (int j=0; j<(n+1); ++j) {
-            printf("([%d] %lf) ", rank, mesh[i*(n+1)+j]);
+void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
+    for (int i=0; i<rows; ++i) {
+        for (int j=0; j<cols; ++j) {
+            printf("([%d] %lf) ", rank, mesh[i*cols+j]);
         }
         putchar('\n');
     }
@@ -154,16 +142,9 @@ void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) 
     }
 }
 
-void dot(int n, double* localv, double* localw,
-        int rank, int chunk, MPI_Comm comm,
-        double* result) {
+void dot(int rows, int cols, double* localv, double* localw,
+        int rank, MPI_Comm comm, double* result) {
     double localsum = 0.0;
-    if (rank==0) {
-        for (int i=0; i<chunk*(n+1); ++i) { localsum += localv[i]*localw[i]; }
-    }
-    else {
-        for (int i=(n+1); i<(chunk+1)*(n+1); ++i) { localsum += localv[i]*localw[i]; }
-    }
-    //for (int i=(n+1); i<chunk*(n+1); ++i) { localsum += localv[i]*localw[i]; }
+    for (int i=0; i<rows*cols; ++i) { localsum += localv[i]*localw[i]; }
     MPI_Allreduce(&localsum, result, 1, MPI_DOUBLE, MPI_SUM, comm);
 }
