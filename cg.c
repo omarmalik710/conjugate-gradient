@@ -31,9 +31,9 @@ int main(int argc, char **argv) {
     double* localg = init_localg(n, locald, chunk);
     //print_local2dmesh(n, localu, rank, chunk);
     //putchar('\n');
-    print_local2dmesh(n, locald, rank, chunk);
-    putchar('\n');
-    //print_local2dmesh(n, localg, rank, chunk);
+    //print_local2dmesh(n, locald, rank, chunk);
+    //putchar('\n');
+    print_local2dmesh(n, localg, rank, chunk);
 
     //double* u = (double*) calloc(N,sizeof(double));
     //double* d = init_d(n);

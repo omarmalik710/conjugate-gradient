@@ -11,11 +11,10 @@ double* init_locald(int n, int rank, int numprocs, int chunk) {
     // only done once (at the start of the program).
     double xi, yj;
     for (int i=0; i<chunk; ++i) {
-        xi = i*h;
+        xi = (i+rank*chunk)*h;
         for (int j=0; j<(n+1); ++j) {
             yj = j*h;
             // Account for boundary conditions.
-            //if (i==0 || i==n || j==0 || j==n) {
             if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
                 d[i*(n+1)+j] = 0.0;
             }
