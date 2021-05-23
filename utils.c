@@ -3,40 +3,51 @@
 #include <math.h>
 #include "utils.h"
 
-double* init_d(int n) {
+double* init_locald(int n, int rank, int numprocs, int chunk) {
     double h = (double) 1 / n;
-    double *d = (double*) malloc((n+1)*(n+1)*sizeof(double));
+    double *d = (double*) malloc(chunk*(n+1)*sizeof(double));
 
     // Initialize d. No need to optimize this, since it's
     // only done once (at the start of the program).
     double xi, yj;
-    for (int i=0; i<=n; ++i) {
+    for (int i=0; i<chunk; ++i) {
         xi = i*h;
-        for (int j=0; j<=n; ++j) {
+        for (int j=0; j<(n+1); ++j) {
             yj = j*h;
             // Account for boundary conditions.
-            if (i==0 || i==n || j==0 || j==n) {
+            //if (i==0 || i==n || j==0 || j==n) {
+            if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
                 d[i*(n+1)+j] = 0.0;
             }
             else {
                 d[i*(n+1)+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
             }
+
         }
     }
     return d;
 }
 
-double* init_g(int n, double* d) {
-    double* g = (double*) malloc((n+1)*(n+1)*sizeof(double));
+double* init_localg(int n, double* d, int chunk) {
+    double* g = (double*) malloc(chunk*(n+1)*sizeof(double));
 
     // Initialize g. No need to optimize this, since it's
     // only done once (at the start of the program).
-    for (int i=0; i<=n; ++i) {
-        for (int j=0; j<=n; ++j) {
+    for (int i=0; i<chunk; ++i) {
+        for (int j=0; j<(n+1); ++j) {
             g[i*(n+1)+j] = -d[i*(n+1)+j];
         }
     }
     return g;
+}
+
+void print_local2dmesh(int n, double* mesh, int rank, int chunk) {
+    for (int i=0; i<chunk; ++i) {
+        for (int j=0; j<(n+1); ++j) {
+            printf("([%d] %lf) ", rank, mesh[i*(n+1)+j]);
+        }
+        putchar('\n');
+    }
 }
 
 void print_2dmesh(int n, double* mesh) {
