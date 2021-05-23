@@ -40,8 +40,8 @@ double* init_g(int n, double* d) {
 }
 
 void print_2dmesh(int n, double* mesh) {
-    for (int i=0; i<(n+1); ++i) {
-        for (int j=0; j<(n+1); ++j) {
+    for (int i=0; i<=n; ++i) {
+        for (int j=0; j<=n; ++j) {
             printf("%lf ", mesh[i*(n+1)+j]);
         }
         putchar('\n');
@@ -71,26 +71,8 @@ void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) 
     }
 }
 
-double dot(int n, double* v, double* w) {
+double dot(int N, double* v, double* w) {
     double sum = 0.0;
-    for (int i=0; i<=n; ++i) { sum += v[i]*w[i]; }
+    for (int i=0; i<N; ++i) { sum += v[i]*w[i]; }
     return sum;
-}
-
-double* vect_add(int n, double* u, double* v) {
-    double* w = (double*) malloc(n*sizeof(double));
-    for (int i=0; i<=n; ++i) { w[i] = u[i]+v[i]; }
-    return w;
-}
-
-double* vect_sub(int n, double* u, double* v) {
-    double* w = (double*) malloc(n*sizeof(double));
-    for (int i=0; i<=n; ++i) { w[i] = u[i]-v[i]; }
-    return w;
-}
-
-double* scal_mult(int n, double* v, double k) {
-    double* w = (double*) malloc(n*sizeof(double));
-    for (int i=0; i<=n; ++i) { w[i] = k*v[i]; }
-    return w;
 }
