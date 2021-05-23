@@ -19,22 +19,24 @@ int main(int argc, char **argv) {
 
     double q0 = dot(N,g,g);
 
-    short stencil_width = 5;
-    short extent = stencil_width/2;
-    short stencil[9] = {0, -1, 0, -1, 4, -1, 0, -1, 0};
     short stencil[5] = {-1, -1, 4, -1, -1};
+    short stencil_width = 5;
+    short extent = stencil_width/(2*2);
 
     //double error = 999;
     double error = 0;
+    double result;
+    int index;
     while (error >= TOL) {
-        for (int i=extent; i<(n+1)*(n+1)-extent; i++) {
-            double result = 0;
-            for (int j=0; j<stencil_width; j++) {
-            for (int j=1; j<stencil_width; j++) {
-                int index = i - extent + j*(n+1);
-                result += stencil[j] * d[index];
+        for (int i=extent; i<(n+1)-extent; ++i) {
+            for (int j=extent; j<(n+1)-extent; ++j) {
+                result = 0;
+                for (int k=0; k<stencil_width; ++k) {
+                    index = i*(n+1) + (j-extent+k);
+                    result += stencil[k] * d[index];
+                }
+                q[i*(n+1)+j] = result;
             }
-            q[i] = result;
         }
     }
 

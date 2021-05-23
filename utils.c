@@ -9,16 +9,16 @@ double* init_d(int n) {
     // Initialize d. No need to optimize this, since it's
     // only done once (at the start of the program).
     double xi, yj;
-    for (int j=0; j<=n; ++j) {
-        yj = j*h;
-        for (int i=0; i<=n; ++i) {
-            xi = i*h;
+    for (int i=0; i<=n; ++i) {
+        xi = i*h;
+        for (int j=0; j<=n; ++j) {
+            yj = j*h;
             // Account for boundary conditions.
             if (i==0 || i==n || j==0 || j==n) {
-                d[i+j*(n+1)] = 0.0;
+                d[i*(n+1)+j] = 0.0;
             }
             else {
-                d[i+j*(n+1)] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
+                d[i*(n+1)+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
             }
         }
     }
@@ -30,9 +30,9 @@ double* init_g(int n, double* d) {
 
     // Initialize g. No need to optimize this, since it's
     // only done once (at the start of the program).
-    for (int j=0; j<=n; ++j) {
-        for (int i=0; i<=n; ++i) {
-            g[i+j*(n+1)] = -d[i+j*(n+1)];
+    for (int i=0; i<=n; ++i) {
+        for (int j=0; j<=n; ++j) {
+            g[i*(n+1)+j] = -d[i*(n+1)+j];
         }
     }
     return g;
@@ -41,7 +41,7 @@ double* init_g(int n, double* d) {
 void print_2dmesh(int n, double* mesh) {
     for (int i=0; i<(n+1); ++i) {
         for (int j=0; j<(n+1); ++j) {
-            printf("%lf ", mesh[i+j*(n+1)]);
+            printf("%lf ", mesh[i*(n+1)+j]);
         }
         putchar('\n');
     }
@@ -49,9 +49,9 @@ void print_2dmesh(int n, double* mesh) {
 
 double* matvect_mult(int n, double* stencil, double* v) {
     double* w = (double*) calloc(n,sizeof(double));
-    for (int j=0; j<n; ++j) {
-        for (int i=0; i<n; ++i) {
-            w[i] += stencil[i+j*n]*v[j];
+    for (int j=0; j<=n; ++j) {
+        for (int i=0; i<=n; ++i) {
+            w[i] += stencil[i*(n+1)+j]*v[j];
         }
     }
     return w;
@@ -59,18 +59,18 @@ double* matvect_mult(int n, double* stencil, double* v) {
 
 double dot(int n, double* v, double* w) {
     double sum = 0.0;
-    for (int i=0; i<n; ++i) { sum += v[i]*w[i]; }
+    for (int i=0; i<=n; ++i) { sum += v[i]*w[i]; }
     return sum;
 }
 
 double* vect_add(int n, double* u, double* v) {
     double* w = (double*) malloc(n*sizeof(double));
-    for (int i=0; i<n; ++i) { w[i] = u[i]+v[i]; }
+    for (int i=0; i<=n; ++i) { w[i] = u[i]+v[i]; }
     return w;
 }
 
 double* scal_mult(int n, double* v, double k) {
     double* w = (double*) malloc(n*sizeof(double));
-    for (int i=0; i<n; ++i) { w[i] = k*v[i]; }
+    for (int i=0; i<=n; ++i) { w[i] = k*v[i]; }
     return w;
 }
