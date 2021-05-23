@@ -34,14 +34,15 @@ int main(int argc, char **argv) {
     int chunk = (n+1) / numprocs;
     double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
     double* locald = init_locald(n, rank, numprocs, chunk);
-    double* localg = init_localg(n, locald, chunk);
+    double* localg = init_localg(n, locald, rank, chunk);
     //print_local2dmesh(n, localu, rank, chunk);
     //putchar('\n');
-    //print_local2dmesh(n, locald, rank, chunk);
+    //print_local2dmesh(n, locald, rank, numprocs, chunk);
     //putchar('\n');
-    print_local2dmesh(n, localg, rank, chunk);
+    print_local2dmesh(n, localg, rank, numprocs, chunk);
     double q0;
-    dot(chunk*(n+1), localg, localg, MPI_COMM_WORLD, &q0);
+    //dot(chunk*(n+1), localg, localg, MPI_COMM_WORLD, &q0);
+    dot(n, localg, localg, rank, chunk, MPI_COMM_WORLD, &q0);
     printf("[RANK %d] q0 = %lf\n", rank, q0);
 
     //double* u = (double*) calloc(N,sizeof(double));

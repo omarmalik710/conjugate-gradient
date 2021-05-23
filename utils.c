@@ -6,17 +6,38 @@
 
 double* init_locald(int n, int rank, int numprocs, int chunk) {
     double h = (double) 1 / n;
-    double *d = (double*) malloc(chunk*(n+1)*sizeof(double));
 
-    // Initialize d. No need to optimize this, since it's
+    // Set different start and end points depending on rank. Ghost
+    // values from neighbors will fill the rest (in another function).
+    double* d;
+    double istart, iend;
+    if ( rank==0 ) {
+        d = (double*) calloc((chunk+1)*(n+1),sizeof(double));
+        istart = 0;
+        iend = chunk;
+    }
+    else if ( rank==(numprocs-1) ) {
+        d = (double*) calloc((chunk+1)*(n+1),sizeof(double));
+        istart = 1;
+        iend = chunk+1;
+    }
+    else {
+        d = (double*) calloc((chunk+2)*(n+1),sizeof(double));
+        istart = 1;
+        iend = chunk+1;
+    }
+
+    // Initialize local d. No need to optimize this, since it's
     // only done once (at the start of the program).
+    int i,j;
     double xi, yj;
-    for (int i=0; i<chunk; ++i) {
-        xi = (i+rank*chunk)*h;
-        for (int j=0; j<(n+1); ++j) {
+    for (i=istart; i<iend; ++i) {
+        xi = ((i-istart)+rank*chunk)*h;
+        for (j=0; j<(n+1); ++j) {
             yj = j*h;
             // Account for boundary conditions.
-            if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
+            //if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
+            if ((rank==0 && i==istart) || (rank==(numprocs-1) && i==chunk) || j==0 || j==n) {
                 d[i*(n+1)+j] = 0.0;
             }
             else {
@@ -25,24 +46,84 @@ double* init_locald(int n, int rank, int numprocs, int chunk) {
 
         }
     }
+
     return d;
 }
 
-double* init_localg(int n, double* d, int chunk) {
+void exchange_boundaries(int n, double* d, int rank, int numprocs, int chunk) {
+    MPI_Datatype rowtype;
+    MPI_Type_contiguous(n+1, MPI_DOUBLE, &rowtype);
+    MPI_Type_commit(&rowtype);
+
+    MPI_Status status;
+    MPI_Request request;
+    int tags[numprocs-1];
+    for (int i=0; i<(numprocs-1); ++i) { tags[i] = i; }
+
+    double *sendbuf, *recvbuf;
+    if ( rank==0 ) {
+        sendbuf = d+(chunk-1)*(n+1);
+        recvbuf = d+chunk*(n+1);
+        //MPI_Isend(sendbuf, 1, rowtype, rank+1, tags[rank], MPI_COMM_WORLD, &status);
+        //MPI_Recv(recvbuf, 1, rowtype, rank+1, tags[rank+1], MPI_COMM_WORLD, &status);
+        MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
+                    recvbuf, 1, rowtype, rank+1, tags[rank+1],
+                    MPI_COMM_WORLD, &status);
+    }
+    else if ( rank==(numprocs-1) ) {
+        sendbuf = d+(n+1);
+        recvbuf = d;
+        //MPI_Isend(d+(n+1), 1, rowtype, rank-1, tags[rank], MPI_COMM_WORLD, &status);
+        //MPI_Recv(d, 1, rowtype, rank-1, tags[rank-1], MPI_COMM_WORLD, &status);
+        MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
+                    recvbuf, 1, rowtype, rank-1, tags[rank-1],
+                    MPI_COMM_WORLD, &status);
+    }
+    else {
+        sendbuf = d+(n+1);
+        recvbuf = d;
+        //MPI_Isend(d+(n+1), 1, rowtype, rank-1, tags[rank], MPI_COMM_WORLD, &status);
+        //MPI_Recv(d, 1, rowtype, rank-1, tags[rank-1], MPI_COMM_WORLD, &status);
+        MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
+                    recvbuf, 1, rowtype, rank-1, tags[rank-1],
+                    MPI_COMM_WORLD, &status);
+
+        sendbuf = d+(chunk-1)*(n+1);
+        recvbuf = d+chunk*(n+1);
+        //MPI_Isend(d+(i-1)*(n+1), 1, rowtype, rank+1, tags[rank], MPI_COMM_WORLD, &status);
+        //MPI_Recv(d+i*(n+1), 1, rowtype, rank+1, tags[rank+1], MPI_COMM_WORLD, &status);
+        MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
+                    recvbuf, 1, rowtype, rank+1, tags[rank+1],
+                    MPI_COMM_WORLD, &status);
+    }
+}
+
+double* init_localg(int n, double* d, int rank, int chunk) {
     double* g = (double*) malloc(chunk*(n+1)*sizeof(double));
+
+    // Set different start and end points depending on rank. Ghost
+    // values from neighbors will fill the rest (in another function).
+    int istart;
+    if ( rank==0 ) { istart = 0; }
+    else { istart = 1; }
 
     // Initialize g. No need to optimize this, since it's
     // only done once (at the start of the program).
     for (int i=0; i<chunk; ++i) {
         for (int j=0; j<(n+1); ++j) {
-            g[i*(n+1)+j] = -d[i*(n+1)+j];
+            g[i*(n+1)+j] = -d[(i+istart)*(n+1)+j];
         }
     }
     return g;
 }
 
-void print_local2dmesh(int n, double* mesh, int rank, int chunk) {
-    for (int i=0; i<chunk; ++i) {
+void print_local2dmesh(int n, double* mesh, int rank, int numprocs, int chunk) {
+    int istart = 0;
+    int iend;
+    if ( rank==0 || rank==(numprocs-1) ) { iend = chunk+1; }
+    else { iend = chunk+2; }
+
+    for (int i=istart; i<iend; ++i) {
         for (int j=0; j<(n+1); ++j) {
             printf("([%d] %lf) ", rank, mesh[i*(n+1)+j]);
         }
@@ -73,8 +154,16 @@ void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) 
     }
 }
 
-void dot(int N, double* localv, double* localw, MPI_Comm comm, double* result) {
+void dot(int n, double* localv, double* localw,
+        int rank, int chunk, MPI_Comm comm,
+        double* result) {
     double localsum = 0.0;
-    for (int i=0; i<N; ++i) { localsum += localv[i]*localw[i]; }
+    if (rank==0) {
+        for (int i=0; i<chunk*(n+1); ++i) { localsum += localv[i]*localw[i]; }
+    }
+    else {
+        for (int i=(n+1); i<(chunk+1)*(n+1); ++i) { localsum += localv[i]*localw[i]; }
+    }
+    //for (int i=(n+1); i<chunk*(n+1); ++i) { localsum += localv[i]*localw[i]; }
     MPI_Allreduce(&localsum, result, 1, MPI_DOUBLE, MPI_SUM, comm);
 }
