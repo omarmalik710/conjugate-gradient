@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <mpi.h>
 #include <math.h>
 #include "utils.h"
 
@@ -49,15 +50,6 @@ void print_local2dmesh(int n, double* mesh, int rank, int chunk) {
     }
 }
 
-void print_2dmesh(int n, double* mesh) {
-    for (int i=0; i<=n; ++i) {
-        for (int j=0; j<=n; ++j) {
-            printf("%lf ", mesh[i*(n+1)+j]);
-        }
-        putchar('\n');
-    }
-}
-
 void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) {
     int stencil_size = my_stencil.size;
     int extent = my_stencil.extent;
@@ -81,8 +73,8 @@ void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) 
     }
 }
 
-double dot(int N, double* v, double* w) {
-    double sum = 0.0;
-    for (int i=0; i<N; ++i) { sum += v[i]*w[i]; }
-    return sum;
+void dot(int N, double* localv, double* localw, MPI_Comm comm, double* result) {
+    double localsum = 0.0;
+    for (int i=0; i<N; ++i) { localsum += localv[i]*localw[i]; }
+    MPI_Allreduce(&localsum, result, 1, MPI_DOUBLE, MPI_SUM, comm);
 }

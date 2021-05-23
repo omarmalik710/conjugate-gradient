@@ -15,6 +15,12 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Status status;
+
+    if ((n+1)%numprocs != 0) {
+        printf("[ERROR] Number of points '%d+1' not divisible by number of processors '%d'.\n", n, numprocs);
+        exit(1);
+    }
+
     int tags[numprocs-1];
     for (int i=0; i<(numprocs-1); ++i) { tags[i] = i; }
 
@@ -34,6 +40,9 @@ int main(int argc, char **argv) {
     //print_local2dmesh(n, locald, rank, chunk);
     //putchar('\n');
     print_local2dmesh(n, localg, rank, chunk);
+    double q0;
+    dot(chunk*(n+1), localg, localg, MPI_COMM_WORLD, &q0);
+    printf("[RANK %d] q0 = %lf\n", rank, q0);
 
     //double* u = (double*) calloc(N,sizeof(double));
     //double* d = init_d(n);
