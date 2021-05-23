@@ -4,14 +4,12 @@
 #include <math.h>
 #include "utils.h"
 
-//double* init_locald(int n, int rank, int numprocs, int chunk) {
 d_struct* init_locald(int n, int rank, int numprocs, int chunk) {
-
     d_struct* locald = (d_struct*) malloc(sizeof(d_struct));
     locald->locald = (double*) malloc(chunk*(n+1)*sizeof(double));
-    // Set different start and end points depending on rank. Ghost
-    // values from neighbors will fill the rest (in another function).
-    double istart, iend;
+
+    // Initialize top and bottom pads. Outer processes are padded in one
+    // direction, while inner ones are padded in two.
     if ( rank==0 ) {
         locald->top_pad = NULL;
         locald->bottom_pad = (double*) calloc(n+1,sizeof(double));
@@ -35,62 +33,55 @@ d_struct* init_locald(int n, int rank, int numprocs, int chunk) {
         for (j=0; j<(n+1); ++j) {
             yj = j*h;
             // Account for boundary conditions.
-            //if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
             if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
                 locald->locald[i*(n+1)+j] = 0.0;
             }
             else {
                 locald->locald[i*(n+1)+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
             }
-
         }
     }
 
     return locald;
 }
 
-void exchange_boundaries(int n, double* d, int rank, int numprocs, int chunk) {
+void exchange_boundaries(int n, d_struct* locald, int rank, int numprocs, int chunk) {
     MPI_Datatype rowtype;
     MPI_Type_contiguous(n+1, MPI_DOUBLE, &rowtype);
     MPI_Type_commit(&rowtype);
 
     MPI_Status status;
-    MPI_Request request;
-    int tags[numprocs-1];
-    for (int i=0; i<(numprocs-1); ++i) { tags[i] = i; }
+    int tags[numprocs];
+    for (int i=0; i<numprocs; ++i) { tags[i] = i; }
 
     double *sendbuf, *recvbuf;
     if ( rank==0 ) {
-        sendbuf = d+(chunk-1)*(n+1);
-        recvbuf = d+chunk*(n+1);
-        //MPI_Isend(sendbuf, 1, rowtype, rank+1, tags[rank], MPI_COMM_WORLD, &status);
-        //MPI_Recv(recvbuf, 1, rowtype, rank+1, tags[rank+1], MPI_COMM_WORLD, &status);
+        // Send from / recv to bottom boundary for first proc.
+        sendbuf = locald->locald + (chunk-1)*(n+1);
+        recvbuf = locald->bottom_pad;
         MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
                     recvbuf, 1, rowtype, rank+1, tags[rank+1],
                     MPI_COMM_WORLD, &status);
     }
     else if ( rank==(numprocs-1) ) {
-        sendbuf = d+(n+1);
-        recvbuf = d;
-        //MPI_Isend(d+(n+1), 1, rowtype, rank-1, tags[rank], MPI_COMM_WORLD, &status);
-        //MPI_Recv(d, 1, rowtype, rank-1, tags[rank-1], MPI_COMM_WORLD, &status);
+        // Send from / recv to top boundary for last proc.
+        sendbuf = locald->locald;
+        recvbuf = locald->top_pad;
         MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
                     recvbuf, 1, rowtype, rank-1, tags[rank-1],
                     MPI_COMM_WORLD, &status);
     }
     else {
-        sendbuf = d+(n+1);
-        recvbuf = d;
-        //MPI_Isend(d+(n+1), 1, rowtype, rank-1, tags[rank], MPI_COMM_WORLD, &status);
-        //MPI_Recv(d, 1, rowtype, rank-1, tags[rank-1], MPI_COMM_WORLD, &status);
+        // Send from / recv to top boundary.
+        sendbuf = locald->locald;
+        recvbuf = locald->top_pad;
         MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
                     recvbuf, 1, rowtype, rank-1, tags[rank-1],
                     MPI_COMM_WORLD, &status);
 
-        sendbuf = d+(chunk-1)*(n+1);
-        recvbuf = d+chunk*(n+1);
-        //MPI_Isend(d+(i-1)*(n+1), 1, rowtype, rank+1, tags[rank], MPI_COMM_WORLD, &status);
-        //MPI_Recv(d+i*(n+1), 1, rowtype, rank+1, tags[rank+1], MPI_COMM_WORLD, &status);
+        // Send from / recv to bottom boundary.
+        sendbuf = locald->locald + (chunk-1)*(n+1);
+        recvbuf = locald->bottom_pad;
         MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
                     recvbuf, 1, rowtype, rank+1, tags[rank+1],
                     MPI_COMM_WORLD, &status);
@@ -113,7 +104,9 @@ double* init_localg(int n, double* d, int rank, int chunk) {
 void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
     for (int i=0; i<rows; ++i) {
         for (int j=0; j<cols; ++j) {
-            printf("([%d] %lf) ", rank, mesh[i*cols+j]);
+            if (mesh != NULL) {
+                printf("([%d] %lf) ", rank, mesh[i*cols+j]);
+            }
         }
         putchar('\n');
     }
