@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "utils.h"
 
 double* init_d(int n) {
     double h = (double) 1 / n;
@@ -47,14 +48,27 @@ void print_2dmesh(int n, double* mesh) {
     }
 }
 
-double* matvect_mult(int n, double* stencil, double* v) {
-    double* w = (double*) calloc(n,sizeof(double));
-    for (int j=0; j<=n; ++j) {
-        for (int i=0; i<=n; ++i) {
-            w[i] += stencil[i*(n+1)+j]*v[j];
+void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) {
+    int stencil_size = my_stencil.size;
+    int extent = my_stencil.extent;
+    int* stencil = my_stencil.stencil;
+
+    double result;
+    int i,j,l,m;
+    int index;
+    for (i=extent; i<(n+1)-extent; ++i) {
+        for (j=extent; j<(n+1)-extent; ++j) {
+
+            result = 0;
+            for (l=0; l<stencil_size; ++l) {
+                for (m=0; m<stencil_size; ++m) {
+                    index = (i - extent + l)*(n+1) + (j - extent + m);
+                    result += stencil[l*stencil_size+m] * src[index];
+                }
+            }
+            dest[i*(n+1)+j] = result;
         }
     }
-    return w;
 }
 
 double dot(int n, double* v, double* w) {
@@ -66,6 +80,12 @@ double dot(int n, double* v, double* w) {
 double* vect_add(int n, double* u, double* v) {
     double* w = (double*) malloc(n*sizeof(double));
     for (int i=0; i<=n; ++i) { w[i] = u[i]+v[i]; }
+    return w;
+}
+
+double* vect_sub(int n, double* u, double* v) {
+    double* w = (double*) malloc(n*sizeof(double));
+    for (int i=0; i<=n; ++i) { w[i] = u[i]-v[i]; }
     return w;
 }
 

@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <string.h>
 //#include <mpi.h>
 #include "utils.h"
 
@@ -17,28 +19,30 @@ int main(int argc, char **argv) {
     print_2dmesh(n, d);
     print_2dmesh(n, g);
 
+    int my_stencil[9] = {0, -1, 0, -1, 4, -1, 0, -1, 0};
+    stencil_struct stencil;
+    stencil.size = 3;
+    stencil.extent = stencil.size/2;
+    stencil.stencil = (int*) malloc(stencil.size*stencil.size*sizeof(int));
+    memcpy(stencil.stencil, my_stencil, sizeof(my_stencil));
+
+    double error = 999;
     double q0 = dot(N,g,g);
+    double tau, q1, beta;
+    //printf("[INFO] q0 = %lf\n", q0);
+    //while (error >= TOL) {
 
-    short stencil[5] = {-1, -1, 4, -1, -1};
-    short stencil_width = 5;
-    short extent = stencil_width/(2*2);
+        apply_stencil(n, stencil, d, q);
+        //tau = q0/dot(N,d,q);
+        //u = vect_add(N, u, scal_mult(N,d,tau));
+        //g = vect_add(N, g, scal_mult(N,q,tau));
+        //q1 = dot(N,g,g);
+        //beta = q1/q0;
+        //d = vect_sub(N, scal_mult(N,d,beta), g);
+        //q0 = q1;
+    //}
 
-    //double error = 999;
-    double error = 0;
-    double result;
-    int index;
-    while (error >= TOL) {
-        for (int i=extent; i<(n+1)-extent; ++i) {
-            for (int j=extent; j<(n+1)-extent; ++j) {
-                result = 0;
-                for (int k=0; k<stencil_width; ++k) {
-                    index = i*(n+1) + (j-extent+k);
-                    result += stencil[k] * d[index];
-                }
-                q[i*(n+1)+j] = result;
-            }
-        }
-    }
+    print_2dmesh(n, q);
 
     return 0;
 }
