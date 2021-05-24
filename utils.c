@@ -55,35 +55,20 @@ void exchange_boundaries(int n, d_struct* locald, int rank, int numprocs, int ch
     for (int i=0; i<numprocs; ++i) { tags[i] = i; }
 
     double *sendbuf, *recvbuf;
-    if ( rank==0 ) {
-        // Send from / recv to bottom boundary for first proc.
-        sendbuf = locald->locald + (chunk-1)*(n+1);
-        recvbuf = locald->bottom_pad;
-        MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
-                    recvbuf, 1, rowtype, rank+1, tags[rank+1],
-                    MPI_COMM_WORLD, &status);
-    }
-    else if ( rank==(numprocs-1) ) {
-        // Send from / recv to top boundary for last proc.
-        sendbuf = locald->locald;
-        recvbuf = locald->top_pad;
-        MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
-                    recvbuf, 1, rowtype, rank-1, tags[rank-1],
-                    MPI_COMM_WORLD, &status);
-    }
-    else {
-        // Send from / recv to top boundary.
-        sendbuf = locald->locald;
-        recvbuf = locald->top_pad;
-        MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
-                    recvbuf, 1, rowtype, rank-1, tags[rank-1],
-                    MPI_COMM_WORLD, &status);
-
+    if (locald->bottom_pad != NULL) {
         // Send from / recv to bottom boundary.
         sendbuf = locald->locald + (chunk-1)*(n+1);
         recvbuf = locald->bottom_pad;
         MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
                     recvbuf, 1, rowtype, rank+1, tags[rank+1],
+                    MPI_COMM_WORLD, &status);
+    }
+    if (locald->top_pad != NULL) {
+        // Send from / recv to top boundary.
+        sendbuf = locald->locald;
+        recvbuf = locald->top_pad;
+        MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
+                    recvbuf, 1, rowtype, rank-1, tags[rank-1],
                     MPI_COMM_WORLD, &status);
     }
 }
@@ -112,7 +97,7 @@ void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
     }
 }
 
-void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk) {
+void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int chunk) {
     int stencil_size = my_stencil->size;
     int extent = my_stencil->extent;
     int* stencil = my_stencil->stencil;
