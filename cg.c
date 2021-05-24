@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 
     int chunk = (n+1) / numprocs;
     double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
-    double* localq = (double*) malloc(chunk*(n+1)*sizeof(double));
+    double* localq = (double*) calloc(chunk*(n+1),sizeof(double));
     d_struct* locald = init_locald(n, rank, numprocs, chunk);
     exchange_boundaries(n, locald, rank, numprocs, chunk);
     double* localg = init_localg(n, locald->locald, rank, chunk);
