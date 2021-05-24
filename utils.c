@@ -112,10 +112,10 @@ void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
     }
 }
 
-void apply_stencil(int n, stencil_struct my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk) {
-    int stencil_size = my_stencil.size;
-    int extent = my_stencil.extent;
-    int* stencil = my_stencil.stencil;
+void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk) {
+    int stencil_size = my_stencil->size;
+    int extent = my_stencil->extent;
+    int* stencil = my_stencil->stencil;
 
     // Apply stencil on inner points.
     double result;
