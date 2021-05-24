@@ -112,7 +112,7 @@ void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
     }
 }
 
-void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) {
+void apply_stencil(int n, stencil_struct my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk) {
     int stencil_size = my_stencil.size;
     int extent = my_stencil.extent;
     int* stencil = my_stencil.stencil;
@@ -120,17 +120,100 @@ void apply_stencil(int n, stencil_struct my_stencil, double* src, double* dest) 
     double result;
     int i,j,l,m;
     int index;
-    for (i=extent; i<(n+1)-extent; ++i) {
+
+    // Apply stencil on inner points.
+    for (i=extent; i<chunk-extent; ++i) {
         for (j=extent; j<(n+1)-extent; ++j) {
 
             result = 0;
             for (l=0; l<stencil_size; ++l) {
                 for (m=0; m<stencil_size; ++m) {
                     index = (i - extent + l)*(n+1) + (j - extent + m);
-                    result += stencil[l*stencil_size+m] * src[index];
+                    result += stencil[l*stencil_size+m] * locald->locald[index];
                 }
             }
-            dest[i*(n+1)+j] = result;
+            localq[i*(n+1)+j] = result;
+        }
+    }
+
+    // Apply stencil on outer points. First proc uses bottom pad,
+    // last proc uses top pad, and intermediate procs use both pads.
+    if ( rank==0 ) {
+        // First proc applies stencil on its last row (i==chunk-extent).
+        for (j=extent; j<(n+1)-extent; ++j) {
+            result = 0;
+            // Handle left, top, and right neighbors as usual.
+            for (l=0; l<stencil_size-1; ++l) {
+                for (m=0; m<stencil_size; ++m) {
+                    index = (i - extent + l)*(n+1) + (j - extent + m);
+                    result += stencil[l*stencil_size+m] * locald->locald[index];
+                }
+            }
+            // Use bottom_pad for the bottom neighbors (l==stencil_size-1).
+            for (m=0; m<stencil_size; ++m) {
+                index = j - extent + m;
+                result += stencil[l*stencil_size+m] * locald->bottom_pad[index];
+            }
+            localq[i*(n+1)+j] = result;
+        }
+    }
+    else if ( rank==(numprocs-1) ) {
+        // Last proc applies stencil on its first row (i==0);
+        for (j=extent; j<(n+1)-extent; ++j) {
+            result = 0;
+            // Handle left, bottom, and right neighbors as usual.
+            for (l=1; l<stencil_size; ++l) {
+                for (m=0; m<stencil_size; ++m) {
+                    index = (-extent + l)*(n+1) + (j - extent + m);
+                    result += stencil[l*stencil_size+m] * locald->locald[index];
+                }
+            }
+            // Use top_pad for the top neighbors (l==0).
+            for (m=0; m<stencil_size; ++m) {
+                index = j - extent + m;
+                result += stencil[m] * locald->top_pad[index];
+            }
+            localq[j] = result;
+        }
+    }
+    else {
+        // Intermediate procs apply stencil on both
+        // first (i==0) and last row (i==chunk-extent).
+
+        //// First row (i==0).
+        for (j=extent; j<(n+1)-extent; ++j) {
+            result = 0;
+            // Handle left, bottom, and right neighbors as usual.
+            for (l=1; l<stencil_size; ++l) {
+                for (m=0; m<stencil_size; ++m) {
+                    index = (-extent + l)*(n+1) + (j - extent + m);
+                    result += stencil[l*stencil_size+m] * locald->locald[index];
+                }
+            }
+            // Use top_pad for the top neighbors (l==0).
+            for (m=0; m<stencil_size; ++m) {
+                index = j - extent + m;
+                result += stencil[m] * locald->top_pad[index];
+            }
+            localq[j] = result;
+        }
+
+        //// Last row (i==chunk-extent).
+        for (j=extent; j<(n+1)-extent; ++j) {
+            result = 0;
+            // Handle left, top, and right neighbors as usual.
+            for (l=0; l<stencil_size-1; ++l) {
+                for (m=0; m<stencil_size; ++m) {
+                    index = (i - extent + l)*(n+1) + (j - extent + m);
+                    result += stencil[l*stencil_size+m] * locald->locald[index];
+                }
+            }
+            // Use bottom_pad for the bottom neighbors (l==stencil_size-1).
+            for (m=0; m<stencil_size; ++m) {
+                index = j - extent + m;
+                result += stencil[l*stencil_size+m] * locald->bottom_pad[index];
+            }
+            localq[i*(n+1)+j] = result;
         }
     }
 }

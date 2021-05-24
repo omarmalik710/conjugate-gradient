@@ -33,21 +33,25 @@ int main(int argc, char **argv) {
 
     int chunk = (n+1) / numprocs;
     double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
+    double* localq = (double*) malloc(chunk*(n+1)*sizeof(double));
     d_struct* locald = init_locald(n, rank, numprocs, chunk);
     exchange_boundaries(n, locald, rank, numprocs, chunk);
     double* localg = init_localg(n, locald->locald, rank, chunk);
     //print_local2dmesh(n, localu, rank, chunk);
     //putchar('\n');
-    print_local2dmesh(1, n+1, locald->top_pad, rank);
-    putchar('\n');
-    print_local2dmesh(chunk, n+1, locald->locald, rank);
-    putchar('\n');
-    print_local2dmesh(1, n+1, locald->bottom_pad, rank);
+    //print_local2dmesh(1, n+1, locald->top_pad, rank);
+    //putchar('\n');
+    //print_local2dmesh(chunk, n+1, locald->locald, rank);
+    //putchar('\n');
+    //print_local2dmesh(1, n+1, locald->bottom_pad, rank);
     //putchar('\n');
     //print_local2dmesh(chunk, n+1, localg, rank);
-    double q0;
-    dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
-    printf("[RANK %d] q0 = %lf\n", rank, q0);
+    //double q0;
+    //dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
+    //printf("[RANK %d] q0 = %lf\n", rank, q0);
+
+    apply_stencil(n, stencil, locald, localq, rank, numprocs, chunk);
+    print_local2dmesh(chunk, n+1, localq, rank);
 
     //int i;
     //double error = 999;
