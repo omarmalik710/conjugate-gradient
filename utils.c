@@ -4,9 +4,12 @@
 #include <math.h>
 #include "utils.h"
 
-d_struct* init_locald(int n, int chunklength, int wrank, MPI_Comm cartcomm, int cartsize) {
+d_struct* init_locald(int n, int chunklength, int wrank, MPI_Settings* mpi_settings) {
     d_struct* locald = (d_struct*) malloc(sizeof(d_struct));
     locald->locald = (double*) malloc(chunklength*chunklength*sizeof(double));
+
+    MPI_Comm cartcomm = mpi_settings->cartcomm;
+    int cartsize = mpi_settings->cartsize;
     int coords[2];
     MPI_Cart_coords(cartcomm, wrank, 2, coords);
     int carti = coords[0];
@@ -67,30 +70,61 @@ d_struct* init_locald(int n, int chunklength, int wrank, MPI_Comm cartcomm, int 
     return locald;
 }
 
-void exchange_boundaries(int n, d_struct* locald, int rank, int numprocs, int chunk, MPI_Request* requests) {
-    MPI_Datatype rowtype;
-    MPI_Type_contiguous(n+1, MPI_DOUBLE, &rowtype);
-    MPI_Type_commit(&rowtype);
-
-    int tags[numprocs];
-    for (int i=0; i<numprocs; ++i) { tags[i] = i; }
+void exchange_boundaries(int chunklength, d_struct* locald, int myrank, MPI_Settings* mpi_settings) {
 
     double *sendbuf, *recvbuf;
-    // Send from / recv to bottom boundary. First
-    // and intermediate procs will do this.
+    // Send from / recv to bottom neighbor. First
+    // and intermediate rows of procs will do this.
+    int toprank, bottomrank;
+    MPI_Cart_shift(mpi_settings->cartcomm, 0, 1, &toprank, &bottomrank);
     if (locald->bottom_pad != NULL) {
-        sendbuf = locald->locald + (chunk-1)*(n+1);
+        sendbuf = locald->locald + (chunklength-1)*chunklength;
         recvbuf = locald->bottom_pad;
-        MPI_Isend(sendbuf, 1, rowtype, rank+1, tags[rank], MPI_COMM_WORLD, requests+rank);
-        MPI_Irecv(recvbuf, 1, rowtype, rank+1, tags[rank+1], MPI_COMM_WORLD, requests+(rank+1));
+        MPI_Isend(sendbuf, 1, mpi_settings->rowtype, bottomrank,
+                  mpi_settings->itags[myrank], mpi_settings->cartcomm,
+                  (mpi_settings->irequests)+myrank);
+        MPI_Irecv(recvbuf, 1, mpi_settings->rowtype, bottomrank,
+                  mpi_settings->itags[bottomrank], mpi_settings->cartcomm,
+                  (mpi_settings->irequests)+bottomrank);
     }
     // Send from / recv to top boundary. Last
-    // and intermediate procs will do this.
+    // and intermediate rows of procs will do this.
     if (locald->top_pad != NULL) {
         sendbuf = locald->locald;
         recvbuf = locald->top_pad;
-        MPI_Isend(sendbuf, 1, rowtype, rank-1, tags[rank], MPI_COMM_WORLD, requests+rank);
-        MPI_Irecv(recvbuf, 1, rowtype, rank-1, tags[rank-1], MPI_COMM_WORLD, requests+(rank-1));
+        MPI_Isend(sendbuf, 1, mpi_settings->rowtype, toprank,
+                  mpi_settings->itags[myrank], mpi_settings->cartcomm,
+                  (mpi_settings->irequests)+myrank);
+        MPI_Irecv(recvbuf, 1, mpi_settings->rowtype, toprank,
+                  mpi_settings->itags[toprank], mpi_settings->cartcomm,
+                  (mpi_settings->irequests)+toprank);
+    }
+
+    // Send from / recv to left neighbor. First
+    // and intermediate columns of procs will do this.
+    int leftrank, rightrank;
+    MPI_Cart_shift(mpi_settings->cartcomm, 1, 1, &leftrank, &rightrank);
+    if (locald->right_pad != NULL) {
+        sendbuf = locald->locald + (chunklength-1);
+        recvbuf = locald->right_pad;
+        MPI_Isend(sendbuf, 1, mpi_settings->coltype, rightrank,
+                  mpi_settings->jtags[myrank], mpi_settings->cartcomm,
+                  (mpi_settings->jrequests)+myrank);
+        MPI_Irecv(recvbuf, 1, mpi_settings->coltype, rightrank,
+                  mpi_settings->jtags[rightrank], mpi_settings->cartcomm,
+                  (mpi_settings->jrequests)+rightrank);
+    }
+    // Send from / recv to left boundary. Last
+    // and intermediate columns of procs will do this.
+    if (locald->top_pad != NULL) {
+        sendbuf = locald->locald;
+        recvbuf = locald->left_pad;
+        MPI_Isend(sendbuf, 1, mpi_settings->coltype, leftrank,
+                  mpi_settings->jtags[myrank], mpi_settings->cartcomm,
+                  (mpi_settings->jrequests)+myrank);
+        MPI_Irecv(recvbuf, 1, mpi_settings->coltype, leftrank,
+                  mpi_settings->jtags[leftrank], mpi_settings->cartcomm,
+                  (mpi_settings->jrequests)+leftrank);
     }
 }
 
@@ -123,7 +157,7 @@ void print_local2dmesh(int rows, int cols, double* mesh, int wrank, MPI_Comm car
     }
 }
 
-void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk) {
+void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk, MPI_Settings* mpi_settings) {
     int stencil_size = my_stencil->size;
     int extent = my_stencil->extent;
     int* stencil = my_stencil->stencil;
@@ -131,9 +165,8 @@ void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* 
     // Exchange top and/ or bottom padded boundaries
     // using nonblocking communication.
     MPI_Request requests[numprocs];
-    //MPI_Status statuses[numprocs];
     MPI_Status status;
-    exchange_boundaries(n, locald, rank, numprocs, chunk, requests);
+    exchange_boundaries(n, locald, rank, mpi_settings);
 
     // Apply stencil on inner points while exchanging
     // the padded boundaries above.
@@ -206,9 +239,38 @@ void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* 
     }
 }
 
-void dot(int rows, int cols, double* localv, double* localw,
-        int rank, MPI_Comm comm, double* result) {
+void dot(int rows, int cols, double* localv, double* localw, MPI_Comm comm, double* result) {
     double localsum = 0.0;
     for (int i=0; i<rows*cols; ++i) { localsum += localv[i]*localw[i]; }
     MPI_Allreduce(&localsum, result, 1, MPI_DOUBLE, MPI_SUM, comm);
+}
+
+MPI_Settings* init_mpi_settings(int numprocs, int chunklength) {
+    MPI_Settings* mpi_settings = (MPI_Settings*) malloc(sizeof(MPI_Settings));
+
+    MPI_Type_contiguous(chunklength, MPI_DOUBLE, &(mpi_settings->rowtype));
+    MPI_Type_commit(&(mpi_settings->rowtype));
+
+    MPI_Type_vector(chunklength, 1, chunklength, MPI_DOUBLE, &(mpi_settings->coltype));
+    MPI_Type_commit(&(mpi_settings->coltype));
+
+    mpi_settings->irequests = (MPI_Request*) malloc(numprocs*sizeof(MPI_Request));
+    mpi_settings->jrequests = (MPI_Request*) malloc(numprocs*sizeof(MPI_Request));
+
+    mpi_settings->itags = (int*) malloc(numprocs*sizeof(int));
+    mpi_settings->jtags = (int*) malloc(numprocs*sizeof(int));
+    for (int i=0; i<numprocs; ++i) {
+        mpi_settings->itags[i] = i;
+        mpi_settings->jtags[i] = i;
+    }
+
+    // Set up cartesian topology of procs.
+    mpi_settings->cartsize = (int) sqrt(numprocs);
+    int dim[2], period[2], reorder;
+    dim[0] = dim[1] = (mpi_settings->cartsize);
+    period[0] = period[1] = 0;
+    reorder = 1;
+    MPI_Cart_create(MPI_COMM_WORLD, 2, dim, period, reorder, &(mpi_settings->cartcomm));
+
+    return mpi_settings;
 }

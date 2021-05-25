@@ -11,7 +11,6 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    int dim[2], period[2], reorder;
     double sqrt_numprocs = sqrt(numprocs);
     if (( rank==0 ) && ( (int)sqrt_numprocs*sqrt_numprocs != numprocs )) {
         printf("[ERROR] Number of processors '%d' is not a perfect square.\n", numprocs);
@@ -27,16 +26,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    // Set up cartesian topology of procs.
-    MPI_Comm cartcomm;
-    int cartsize = (int) sqrt_numprocs;
-    dim[0] = dim[1] = cartsize;
-    period[0] = period[1] = 0;
-    reorder = 1;
-    MPI_Cart_create(MPI_COMM_WORLD, 2, dim, period, reorder, &cartcomm);
-
-    int tags[numprocs-1];
-    for (int i=0; i<(numprocs-1); ++i) { tags[i] = i; }
+    MPI_Settings* mpi_settings = init_mpi_settings(numprocs, chunklength);
 
     // Initialize stencil.
     int my_stencil[9] = {0, -1, 0, -1, 4, -1, 0, -1, 0};
@@ -47,20 +37,21 @@ int main(int argc, char **argv) {
     memcpy(stencil->stencil, my_stencil, sizeof(my_stencil));
 
     // Initialize local arrays.
-    d_struct* locald = init_locald(n, chunklength, rank, cartcomm, cartsize);
+    d_struct* locald = init_locald(n, chunklength, rank, mpi_settings);
     //print_local2dmesh(chunklength, chunklength, locald->locald, rank, cartcomm);
     double* localg = init_localg(chunklength, locald->locald);
-    print_local2dmesh(chunklength, chunklength, localg, rank, cartcomm);
-    //double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
-    //double* localq = (double*) calloc(chunk*(n+1),sizeof(double));
+    //print_local2dmesh(chunklength, chunklength, localg, rank, cartcomm);
+    double* localu = (double*) calloc(chunklength*chunklength,sizeof(double));
+    double* localq = (double*) calloc(chunklength*chunklength,sizeof(double));
 
-    //int i;
-    //double q0, tau, q1, beta;
+    int i;
+    double q0, tau, q1, beta;
 
     //// Step 2: q0 = dot(g,g)
     //MPI_Barrier(MPI_COMM_WORLD);
     //double runtime = MPI_Wtime();
-    //dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
+    dot(chunklength, chunklength, localg, localg, MPI_COMM_WORLD, &q0);
+    printf("[INFO] q0 = %.16lf\n", q0);
     //for (int iter=0; iter<MAX_ITERS; iter++) {
     //    //printf("[RANK %d, Iter %d]\n", rank, iter);
 
@@ -99,8 +90,12 @@ int main(int argc, char **argv) {
     //    printf("%.16lf\n", max_runtime);
     //}
 
-    //free(localu); free(localg); free(localq);
+    //free(localu);
+    //free(localg);
+    //free(localq);
     //free(locald);
+    //free(stencil);
+    //free(mpi_settings);
     MPI_Finalize();
 
     return 0;
