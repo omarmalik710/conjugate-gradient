@@ -94,14 +94,14 @@ void exchange_boundaries(int n, d_struct* locald, int rank, int numprocs, int ch
     }
 }
 
-double* init_localg(int n, double* d, int rank, int chunk) {
-    double* g = (double*) malloc(chunk*(n+1)*sizeof(double));
+double* init_localg(int chunklength, double* d) {
+    double* g = (double*) malloc(chunklength*chunklength*sizeof(double));
 
     // Initialize g. No need to optimize this, since it's
     // only done once (at the start of the program).
-    for (int i=0; i<chunk; ++i) {
-        for (int j=0; j<(n+1); ++j) {
-            g[i*(n+1)+j] = -d[i*(n+1)+j];
+    for (int i=0; i<chunklength; ++i) {
+        for (int j=0; j<chunklength; ++j) {
+            g[i*chunklength+j] = -d[i*chunklength+j];
         }
     }
     return g;

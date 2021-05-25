@@ -48,8 +48,9 @@ int main(int argc, char **argv) {
 
     // Initialize local arrays.
     d_struct* locald = init_locald(n, chunklength, rank, cartcomm, cartsize);
-    print_local2dmesh(chunklength, chunklength, locald->locald, rank, cartcomm);
-    //double* localg = init_localg(n, locald->locald, rank, chunk);
+    //print_local2dmesh(chunklength, chunklength, locald->locald, rank, cartcomm);
+    double* localg = init_localg(chunklength, locald->locald);
+    print_local2dmesh(chunklength, chunklength, localg, rank, cartcomm);
     //double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
     //double* localq = (double*) calloc(chunk*(n+1),sizeof(double));
 
