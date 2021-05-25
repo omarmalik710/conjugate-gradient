@@ -16,6 +16,10 @@ typedef struct my_d {
 
 typedef struct my_MPI_Settings {
     int cartsize;
+    int leftrank;
+    int toprank;
+    int bottomrank;
+    int rightrank;
     int* itags;
     int* jtags;
     MPI_Request* irequests;

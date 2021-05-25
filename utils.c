@@ -65,13 +65,13 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     // Wait for receive of padded boundaries from the top
     // and/or bottom neighbors to finish before applying the
     // stencil on the first and last rows.
-    int toprank, bottomrank;
-    MPI_Cart_shift(mpi_settings->cartcomm, 0, 1, &toprank, &bottomrank);
     if (locald->top_pad != NULL) {
-        MPI_Wait((mpi_settings->irequests)+toprank, &(mpi_settings->status));
+        MPI_Wait((mpi_settings->irequests)+(mpi_settings->toprank),
+                 &(mpi_settings->status));
     }
     if (locald->bottom_pad != NULL) {
-        MPI_Wait((mpi_settings->irequests)+bottomrank, &(mpi_settings->status));
+        MPI_Wait((mpi_settings->irequests)+(mpi_settings->bottomrank),
+                 &(mpi_settings->status));
     }
 
     //// Non-corner points: first row (i==0).
@@ -118,13 +118,13 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     // the first and last columns. (Left and right edges are
     // analogous to the top and bottom cases above: just make
     // the swaps i->j and l->m.)
-    int leftrank, rightrank;
-    MPI_Cart_shift(mpi_settings->cartcomm, 1, 1, &leftrank, &rightrank);
     if (locald->left_pad != NULL) {
-        MPI_Wait((mpi_settings->jrequests)+leftrank, &(mpi_settings->status));
+        MPI_Wait((mpi_settings->jrequests)+(mpi_settings->leftrank),
+                 &(mpi_settings->status));
     }
     if (locald->right_pad != NULL) {
-        MPI_Wait((mpi_settings->jrequests)+rightrank, &(mpi_settings->status));
+        MPI_Wait((mpi_settings->jrequests)+(mpi_settings->rightrank),
+                 &(mpi_settings->status));
     }
 
     //// Non-corner points: first column (j==0).
@@ -458,6 +458,10 @@ MPI_Settings* init_mpi_settings(int numprocs, int chunklength) {
     period[0] = period[1] = 0;
     reorder = 1;
     MPI_Cart_create(MPI_COMM_WORLD, 2, dim, period, reorder, &(mpi_settings->cartcomm));
+
+    // Get each processors neighbors if present.
+    MPI_Cart_shift(mpi_settings->cartcomm, 0, 1, &(mpi_settings->toprank), &(mpi_settings->bottomrank));
+    MPI_Cart_shift(mpi_settings->cartcomm, 1, 1, &(mpi_settings->leftrank), &(mpi_settings->rightrank));
 
     return mpi_settings;
 }
