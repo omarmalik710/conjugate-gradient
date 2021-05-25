@@ -20,12 +20,13 @@ int main(int argc, char **argv) {
     int n = atoi(argv[1]);
     int chunkarea = (n+1)*(n+1) / numprocs;
     int chunklength = sqrt(chunkarea);
-    int localN = chunklength*chunklength;
     if (( rank==0 ) && ( ((n+1)*(n+1) % numprocs) != 0 )) {
         printf("[ERROR] Number of points '%d+1' not divisible by number of processors '%d'.\n", n, numprocs);
         exit(1);
     }
 
+    // This sets up various settings to facilitate the
+    // MPI communication in a compact manner.
     MPI_Settings* mpi_settings = init_mpi_settings(numprocs, chunklength);
 
     // Initialize stencil.
@@ -38,21 +39,7 @@ int main(int argc, char **argv) {
 
     // Initialize local arrays.
     d_struct* locald = init_locald(n, chunklength, rank, mpi_settings);
-
-    //print_local2dmesh(1, chunklength, locald->left_pad, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(1, chunklength, locald->top_pad, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(chunklength, chunklength, locald->locald, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(1, chunklength, locald->bottom_pad, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(1, chunklength, locald->right_pad, rank, mpi_settings->cartcomm);
-    //exchange_boundaries(chunklength, locald, rank, mpi_settings);
-    //print_local2dmesh(1, chunklength, locald->left_pad, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(1, chunklength, locald->top_pad, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(chunklength, chunklength, locald->locald, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(1, chunklength, locald->bottom_pad, rank, mpi_settings->cartcomm);
-    //print_local2dmesh(1, chunklength, locald->right_pad, rank, mpi_settings->cartcomm);
-
     double* localg = init_localg(chunklength, locald->locald);
-    //print_local2dmesh(chunklength, chunklength, localg, rank, cartcomm);
     double* localu = (double*) calloc(chunklength*chunklength,sizeof(double));
     double* localq = (double*) calloc(chunklength*chunklength,sizeof(double));
 
@@ -61,38 +48,52 @@ int main(int argc, char **argv) {
     MPI_Barrier(MPI_COMM_WORLD);
     double runtime = MPI_Wtime();
 
-    //// Step 2: q0 = dot(g,g)
-    dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q0);
-    //printf("[INFO] q0 = %.16lf\n", q0);
-    for (int iter=0; iter<MAX_ITERS; iter++) {
-        //printf("[RANK %d, Iter %d]\n", rank, iter);
+    if (numprocs == 1) {
+        //// Step 2: calculate q0, then begin the conjugate gradient procedure.
+        dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q0);
+        for (int iter=0; iter<MAX_ITERS; iter++) {
+            // Step 4: q = Ad using a stencil-based product in serial.
+            apply_stencil_serial(n, stencil, locald->locald, localq);
 
-        // Step 4: q = Ad. Exchange boundaries first
-        // before applying the stencil.
-        //printf("[RANK %d, Iter %d]\n", rank, iter);
-        apply_stencil(chunklength, stencil, locald, localq, rank, mpi_settings);
+            // Steps 5-7: calculate tau, then update u and g.
+            dot(chunklength, chunklength, locald->locald, localq, mpi_settings->cartcomm, &tau);
+            tau = q0/tau;
+            for (i=0; i<chunkarea; ++i) { localu[i] += tau*(locald->locald[i]); }
+            for (i=0; i<chunkarea; ++i) { localg[i] += tau*localq[i]; }
 
-        // Step 5: tau = q0/dot(d,q)
-        dot(chunklength, chunklength, locald->locald, localq, mpi_settings->cartcomm, &tau);
-        tau = q0/tau;
+            // Steps 8-10: calculate beta, then update d.
+            dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
+            beta = q1/q0;
+            for (i=0; i<chunkarea; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
 
-        // Step 6: u = u + tau*d
-        for (i=0; i<localN; ++i) { localu[i] += tau*(locald->locald[i]); }
+            q0 = q1;
+        }
+    }
+    else {
+        //// Step 2: calculate q0, then begin the conjugate gradient procedure.
+        dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q0);
+        for (int iter=0; iter<MAX_ITERS; iter++) {
+            // Step 4: q = Ad using a stencil-based product in parallel.
+            apply_stencil_parallel(chunklength, stencil, locald, localq, rank, mpi_settings);
 
-        // Step 7: g = g + tau*q
-        for (i=0; i<localN; ++i) { localg[i] += tau*localq[i]; }
+            // Steps 5-7: calculate tau, then update u and g.
+            dot(chunklength, chunklength, locald->locald, localq, mpi_settings->cartcomm, &tau);
+            tau = q0/tau;
+            for (i=0; i<chunkarea; ++i) { localu[i] += tau*(locald->locald[i]); }
+            for (i=0; i<chunkarea; ++i) { localg[i] += tau*localq[i]; }
 
-        // Step 8: q1 = dot(g,g)
-        dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
-        beta = q1/q0;
+            // Steps 8-10: calculate beta, then update d.
+            dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
+            beta = q1/q0;
+            for (i=0; i<chunkarea; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
 
-        // Step 10: d = -g + beta*d
-        for (i=0; i<localN; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
-        q0 = q1;
+            q0 = q1;
+        }
     }
     runtime = MPI_Wtime() - runtime;
     double max_runtime;
     MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, mpi_settings->cartcomm);
+    //print_local2dmesh(chunklength, chunklength, localu, rank, mpi_settings->cartcomm);
 
     // Output: norm(g) = sqrt( dot(g,g) )
     double norm_g;

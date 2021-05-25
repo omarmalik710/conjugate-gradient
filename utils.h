@@ -15,30 +15,22 @@ typedef struct my_d {
 } d_struct;
 
 typedef struct my_MPI_Settings {
-    MPI_Comm cartcomm;
-    MPI_Datatype rowtype;
-    MPI_Datatype coltype;
+    int cartsize;
+    int* itags;
+    int* jtags;
     MPI_Request* irequests;
     MPI_Request* jrequests;
     MPI_Status status;
-    int* itags;
-    int* jtags;
-    int cartsize;
+    MPI_Datatype rowtype;
+    MPI_Datatype coltype;
+    MPI_Comm cartcomm;
 } MPI_Settings;
 
-//typedef struct my_corner_indices {
-//    int icorn;
-//    int jcorn;
-//    int lstart;
-//    int lend;
-//    int mstart;
-//    int mend;
-//} corner_indices;
-
+void apply_stencil_serial(int n, stencil_struct* my_stencil, double* d, double* q);
+void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d_struct* locald, double* localq, const int myrank, MPI_Settings* mpi_settings);
+void exchange_boundaries(const int chunklength, d_struct* locald, const int myrank, MPI_Settings* mpi_settings);
+d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_Settings* mpi_settings);
+double* init_localg(const int chunklength, double* d);
+void print_local2dmesh(const int rows, const int cols, double* mesh, const int myrank, MPI_Comm cartcomm);
+void dot(const int rows, const int cols, double* localv, double* localw, MPI_Comm comm, double* result);
 MPI_Settings* init_mpi_settings(int numprocs, int chunklength);
-d_struct* init_locald(int n, int chunklength, int wrank, MPI_Settings* mpi_settings);
-void exchange_boundaries(int chunklength, d_struct* locald, int myrank, MPI_Settings* mpi_settings);
-double* init_localg(int chunklength, double* d);
-void print_local2dmesh(int rows, int cols, double* mesh, int wrank, MPI_Comm cartcomm);
-void apply_stencil(int chunklength, stencil_struct* my_stencil, d_struct* locald, double* localq, int myrank, MPI_Settings* mpi_settings);
-void dot(int rows, int cols, double* localv, double* localw, MPI_Comm comm, double* result);
