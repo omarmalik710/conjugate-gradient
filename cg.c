@@ -12,10 +12,16 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    double numprocs_sqrt = sqrt(numprocs);
+    if ( (rank==0) && ((int)numprocs_sqrt*numprocs_sqrt != numprocs) ) {
+        printf("[ERROR] Number of processors '%d' is not a perfect square.\n", numprocs);
+        exit(1);
+    }
+
     int n = atoi(argv[1]);
     int chunk = (n+1) / numprocs;
     int localN = chunk*(n+1);
-    if ((n+1)%numprocs != 0) {
+    if ( (rank==0) && ((n+1)%numprocs != 0) ) {
         printf("[ERROR] Number of points '%d+1' not divisible by number of processors '%d'.\n", n, numprocs);
         exit(1);
     }
