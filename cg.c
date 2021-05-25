@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
 
     int i;
     double q0, tau, q1, beta;
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(mpi_settings->cartcomm);
     double runtime = MPI_Wtime();
 
     if (numprocs == 1) {
@@ -90,6 +90,7 @@ int main(int argc, char **argv) {
             q0 = q1;
         }
     }
+    MPI_Barrier(mpi_settings->cartcomm);
     runtime = MPI_Wtime() - runtime;
     double max_runtime;
     MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, mpi_settings->cartcomm);
