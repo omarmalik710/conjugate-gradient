@@ -4,23 +4,40 @@
 #include <math.h>
 #include "utils.h"
 
-d_struct* init_locald(int n, int rank, int numprocs, int chunk) {
+d_struct* init_locald(int n, int chunklength, int wrank, int rrank, int rnumprocs, int crank, int cnumprocs) {
     d_struct* locald = (d_struct*) malloc(sizeof(d_struct));
-    locald->locald = (double*) malloc(chunk*(n+1)*sizeof(double));
+    locald->locald = (double*) malloc(chunklength*chunklength*sizeof(double));
 
-    // Initialize top and bottom pads. Outer processes are padded in one
-    // direction, while inner ones are padded in two.
-    if ( rank==0 ) {
+    // Initialize top and bottom pads in column groups. First and
+    // last procs are padded in one direction, while inner ones
+    // are padded in two.
+    if ( crank==0 ) {
         locald->top_pad = NULL;
-        locald->bottom_pad = (double*) calloc(n+1,sizeof(double));
+        locald->bottom_pad = (double*) calloc(chunklength,sizeof(double));
     }
-    else if ( rank==(numprocs-1) ) {
-        locald->top_pad = (double*) calloc(n+1,sizeof(double));
+    else if ( crank==(cnumprocs-1) ) {
+        locald->top_pad = (double*) calloc(chunklength,sizeof(double));
         locald->bottom_pad = NULL;
     }
     else {
-        locald->top_pad = (double*) calloc(n+1,sizeof(double));
-        locald->bottom_pad = (double*) calloc(n+1,sizeof(double));
+        locald->top_pad = (double*) calloc(chunklength,sizeof(double));
+        locald->bottom_pad = (double*) calloc(chunklength,sizeof(double));
+    }
+
+    // Initialize left and right pads in row groups. First and
+    // last procs are padded in one direction, while inner ones
+    // are padded in two.
+    if ( rrank==0 ) {
+        locald->left_pad = NULL;
+        locald->right_pad = (double*) calloc(chunklength,sizeof(double));
+    }
+    else if ( rrank==(rnumprocs-1) ) {
+        locald->left_pad = (double*) calloc(chunklength,sizeof(double));
+        locald->right_pad = NULL;
+    }
+    else {
+        locald->left_pad = (double*) calloc(chunklength,sizeof(double));
+        locald->right_pad = (double*) calloc(chunklength,sizeof(double));
     }
 
     // Initialize local d. No need to optimize this, since it's
@@ -28,16 +45,17 @@ d_struct* init_locald(int n, int rank, int numprocs, int chunk) {
     int i,j;
     double xi, yj;
     double h = (double) 1 / n;
-    for (i=0; i<chunk; ++i) {
-        xi = (i+rank*chunk)*h;
-        for (j=0; j<(n+1); ++j) {
-            yj = j*h;
+    for (i=0; i<chunklength; ++i) {
+        xi = (i+crank*chunklength)*h;
+        for (j=0; j<chunklength; ++j) {
+            yj = (j+rrank*chunklength)*h;
             // Account for boundary conditions.
-            if ((rank==0 && i==0) || (rank==(numprocs-1) && i==(chunk-1)) || j==0 || j==n) {
-                locald->locald[i*(n+1)+j] = 0.0;
+            if ( (crank==0 && i==0) || (crank==(cnumprocs-1) && i==(chunklength-1)) ||
+                 (rrank==0 && j==0) || (rrank==(rnumprocs-1) && j==(chunklength-1)) ) {
+                locald->locald[i*chunklength+j] = 0.0;
             }
             else {
-                locald->locald[i*(n+1)+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
+                locald->locald[i*chunklength+j] = 2*h*h * ( xi*(1-xi) + yj*(1-yj) );
             }
         }
     }
@@ -85,11 +103,11 @@ double* init_localg(int n, double* d, int rank, int chunk) {
     return g;
 }
 
-void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
+void print_local2dmesh(int rows, int cols, double* mesh, int wrank, int rrank, int crank) {
     for (int i=0; i<rows; ++i) {
         for (int j=0; j<cols; ++j) {
             if (mesh != NULL) {
-                printf("([%d] %lf) ", rank, mesh[i*cols+j]);
+                printf("([%d (%d,%d)] %lf) ", wrank, rrank, crank, mesh[i*cols+j]);
             }
         }
         putchar('\n');

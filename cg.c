@@ -11,20 +11,36 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    double numprocs_sqrt = sqrt(numprocs);
-    if ( (rank==0) && ((int)numprocs_sqrt*numprocs_sqrt != numprocs) ) {
+    double sqrt_numprocs = sqrt(numprocs);
+    if (( rank==0 ) && ( (int)sqrt_numprocs*sqrt_numprocs != numprocs )) {
         printf("[ERROR] Number of processors '%d' is not a perfect square.\n", numprocs);
         exit(1);
     }
 
     int n = atoi(argv[1]);
-    int chunk = (n+1) / numprocs;
-    int localN = chunk*(n+1);
-    if ( (rank==0) && ((n+1)%numprocs != 0) ) {
+    int chunkarea = (n+1)*(n+1) / numprocs;
+    int chunklength = sqrt(chunkarea);
+    int localN = chunklength*chunklength;
+    if (( rank==0 ) && ( ((n+1)*(n+1) % numprocs) != 0 )) {
         printf("[ERROR] Number of points '%d+1' not divisible by number of processors '%d'.\n", n, numprocs);
         exit(1);
     }
+
+    int color = rank / (int) sqrt_numprocs;
+    int key = rank % (int) sqrt_numprocs;
+
+    int rrank, rnumprocs;
+    MPI_Comm row_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &row_comm);
+    MPI_Comm_size(row_comm, &rnumprocs);
+    MPI_Comm_rank(row_comm, &rrank);
+
+    int crank, cnumprocs;
+    MPI_Comm col_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &col_comm);
+    MPI_Comm_size(col_comm, &cnumprocs);
+    MPI_Comm_rank(col_comm, &crank);
+
     int tags[numprocs-1];
     for (int i=0; i<(numprocs-1); ++i) { tags[i] = i; }
 
@@ -37,58 +53,59 @@ int main(int argc, char **argv) {
     memcpy(stencil->stencil, my_stencil, sizeof(my_stencil));
 
     // Initialize local arrays.
-    d_struct* locald = init_locald(n, rank, numprocs, chunk);
-    double* localg = init_localg(n, locald->locald, rank, chunk);
-    double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
-    double* localq = (double*) calloc(chunk*(n+1),sizeof(double));
+    d_struct* locald = init_locald(n, chunklength, rank, rrank, rnumprocs, crank, cnumprocs);
+    print_local2dmesh(chunklength, chunklength, locald->locald, rank, rrank, crank);
+    //double* localg = init_localg(n, locald->locald, rank, chunk);
+    //double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
+    //double* localq = (double*) calloc(chunk*(n+1),sizeof(double));
 
-    int i;
-    double q0, tau, q1, beta;
+    //int i;
+    //double q0, tau, q1, beta;
 
-    // Step 2: q0 = dot(g,g)
-    MPI_Barrier(MPI_COMM_WORLD);
-    double runtime = MPI_Wtime();
-    dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
-    for (int iter=0; iter<MAX_ITERS; iter++) {
-        //printf("[RANK %d, Iter %d]\n", rank, iter);
+    //// Step 2: q0 = dot(g,g)
+    //MPI_Barrier(MPI_COMM_WORLD);
+    //double runtime = MPI_Wtime();
+    //dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
+    //for (int iter=0; iter<MAX_ITERS; iter++) {
+    //    //printf("[RANK %d, Iter %d]\n", rank, iter);
 
-        // Step 4: q = Ad. Exchange boundaries first
-        // before applying the stencil.
-        apply_stencil(n, stencil, locald, localq, rank, numprocs, chunk);
+    //    // Step 4: q = Ad. Exchange boundaries first
+    //    // before applying the stencil.
+    //    apply_stencil(n, stencil, locald, localq, rank, numprocs, chunk);
 
-        // Step 5: tau = q0/dot(d,q)
-        dot(chunk, n+1, locald->locald, localq, rank, MPI_COMM_WORLD, &tau);
-        tau = q0/tau;
+    //    // Step 5: tau = q0/dot(d,q)
+    //    dot(chunk, n+1, locald->locald, localq, rank, MPI_COMM_WORLD, &tau);
+    //    tau = q0/tau;
 
-        // Step 6: u = u + tau*d
-        for (i=0; i<localN; ++i) { localu[i] += tau*(locald->locald[i]); }
+    //    // Step 6: u = u + tau*d
+    //    for (i=0; i<localN; ++i) { localu[i] += tau*(locald->locald[i]); }
 
-        // Step 7: g = g + tau*q
-        for (i=0; i<localN; ++i) { localg[i] += tau*localq[i]; }
+    //    // Step 7: g = g + tau*q
+    //    for (i=0; i<localN; ++i) { localg[i] += tau*localq[i]; }
 
-        // Step 8: q1 = dot(g,g)
-        dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q1);
-        beta = q1/q0;
+    //    // Step 8: q1 = dot(g,g)
+    //    dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q1);
+    //    beta = q1/q0;
 
-        // Step 10: d = -g + beta*d
-        for (i=0; i<localN; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
-        q0 = q1;
-    }
-    runtime = MPI_Wtime() - runtime;
-    double max_runtime;
-    MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    //    // Step 10: d = -g + beta*d
+    //    for (i=0; i<localN; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
+    //    q0 = q1;
+    //}
+    //runtime = MPI_Wtime() - runtime;
+    //double max_runtime;
+    //MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
-    // Output: norm(g) = sqrt( dot(g,g) )
-    double norm_g;
-    dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &norm_g);
-    norm_g = sqrt(norm_g);
-    if (rank==0) {
-        printf("[INFO] norm_g = %.16lf\n", norm_g);
-        printf("%.16lf\n", max_runtime);
-    }
+    //// Output: norm(g) = sqrt( dot(g,g) )
+    //double norm_g;
+    //dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &norm_g);
+    //norm_g = sqrt(norm_g);
+    //if (rank==0) {
+    //    printf("[INFO] norm_g = %.16lf\n", norm_g);
+    //    printf("%.16lf\n", max_runtime);
+    //}
 
-    free(localu); free(localg); free(localq);
-    free(locald);
+    //free(localu); free(localg); free(localq);
+    //free(locald);
     MPI_Finalize();
 
     return 0;
