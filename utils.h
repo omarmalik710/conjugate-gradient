@@ -1,4 +1,4 @@
-#define MAX_ITERS 200
+#define MAX_ITERS 1
 typedef struct my_stencil {
     int size;
     int extent;
@@ -11,6 +11,7 @@ typedef struct my_d {
     double* locald;
     double* bottom_pad;
     double* right_pad;
+    double* corner_pad;
 } d_struct;
 
 typedef struct my_MPI_Settings {
@@ -25,10 +26,19 @@ typedef struct my_MPI_Settings {
     int cartsize;
 } MPI_Settings;
 
+//typedef struct my_corner_indices {
+//    int icorn;
+//    int jcorn;
+//    int lstart;
+//    int lend;
+//    int mstart;
+//    int mend;
+//} corner_indices;
+
 MPI_Settings* init_mpi_settings(int numprocs, int chunklength);
 d_struct* init_locald(int n, int chunklength, int wrank, MPI_Settings* mpi_settings);
 void exchange_boundaries(int chunklength, d_struct* locald, int myrank, MPI_Settings* mpi_settings);
 double* init_localg(int chunklength, double* d);
 void print_local2dmesh(int rows, int cols, double* mesh, int wrank, MPI_Comm cartcomm);
-void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk, MPI_Settings* mpi_settings);
+void apply_stencil(int chunklength, stencil_struct* my_stencil, d_struct* locald, double* localq, int myrank, MPI_Settings* mpi_settings);
 void dot(int rows, int cols, double* localv, double* localw, MPI_Comm comm, double* result);

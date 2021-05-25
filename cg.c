@@ -38,7 +38,19 @@ int main(int argc, char **argv) {
 
     // Initialize local arrays.
     d_struct* locald = init_locald(n, chunklength, rank, mpi_settings);
-    //print_local2dmesh(chunklength, chunklength, locald->locald, rank, cartcomm);
+
+    //print_local2dmesh(1, chunklength, locald->left_pad, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(1, chunklength, locald->top_pad, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(chunklength, chunklength, locald->locald, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(1, chunklength, locald->bottom_pad, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(1, chunklength, locald->right_pad, rank, mpi_settings->cartcomm);
+    //exchange_boundaries(chunklength, locald, rank, mpi_settings);
+    //print_local2dmesh(1, chunklength, locald->left_pad, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(1, chunklength, locald->top_pad, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(chunklength, chunklength, locald->locald, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(1, chunklength, locald->bottom_pad, rank, mpi_settings->cartcomm);
+    //print_local2dmesh(1, chunklength, locald->right_pad, rank, mpi_settings->cartcomm);
+
     double* localg = init_localg(chunklength, locald->locald);
     //print_local2dmesh(chunklength, chunklength, localg, rank, cartcomm);
     double* localu = (double*) calloc(chunklength*chunklength,sizeof(double));
@@ -46,56 +58,58 @@ int main(int argc, char **argv) {
 
     int i;
     double q0, tau, q1, beta;
+    MPI_Barrier(MPI_COMM_WORLD);
+    double runtime = MPI_Wtime();
 
     //// Step 2: q0 = dot(g,g)
-    //MPI_Barrier(MPI_COMM_WORLD);
-    //double runtime = MPI_Wtime();
-    dot(chunklength, chunklength, localg, localg, MPI_COMM_WORLD, &q0);
-    printf("[INFO] q0 = %.16lf\n", q0);
-    //for (int iter=0; iter<MAX_ITERS; iter++) {
-    //    //printf("[RANK %d, Iter %d]\n", rank, iter);
+    dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q0);
+    //printf("[INFO] q0 = %.16lf\n", q0);
+    for (int iter=0; iter<MAX_ITERS; iter++) {
+        //printf("[RANK %d, Iter %d]\n", rank, iter);
 
-    //    // Step 4: q = Ad. Exchange boundaries first
-    //    // before applying the stencil.
-    //    apply_stencil(n, stencil, locald, localq, rank, numprocs, chunk);
+        // Step 4: q = Ad. Exchange boundaries first
+        // before applying the stencil.
+        //printf("[RANK %d, Iter %d]\n", rank, iter);
+        apply_stencil(chunklength, stencil, locald, localq, rank, mpi_settings);
 
-    //    // Step 5: tau = q0/dot(d,q)
-    //    dot(chunk, n+1, locald->locald, localq, rank, MPI_COMM_WORLD, &tau);
-    //    tau = q0/tau;
+        // Step 5: tau = q0/dot(d,q)
+        dot(chunklength, chunklength, locald->locald, localq, mpi_settings->cartcomm, &tau);
+        tau = q0/tau;
 
-    //    // Step 6: u = u + tau*d
-    //    for (i=0; i<localN; ++i) { localu[i] += tau*(locald->locald[i]); }
+        // Step 6: u = u + tau*d
+        for (i=0; i<localN; ++i) { localu[i] += tau*(locald->locald[i]); }
 
-    //    // Step 7: g = g + tau*q
-    //    for (i=0; i<localN; ++i) { localg[i] += tau*localq[i]; }
+        // Step 7: g = g + tau*q
+        for (i=0; i<localN; ++i) { localg[i] += tau*localq[i]; }
 
-    //    // Step 8: q1 = dot(g,g)
-    //    dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q1);
-    //    beta = q1/q0;
+        // Step 8: q1 = dot(g,g)
+        dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
+        beta = q1/q0;
 
-    //    // Step 10: d = -g + beta*d
-    //    for (i=0; i<localN; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
-    //    q0 = q1;
-    //}
-    //runtime = MPI_Wtime() - runtime;
-    //double max_runtime;
-    //MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+        // Step 10: d = -g + beta*d
+        for (i=0; i<localN; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
+        q0 = q1;
+    }
+    runtime = MPI_Wtime() - runtime;
+    double max_runtime;
+    MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, mpi_settings->cartcomm);
 
-    //// Output: norm(g) = sqrt( dot(g,g) )
-    //double norm_g;
-    //dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &norm_g);
-    //norm_g = sqrt(norm_g);
-    //if (rank==0) {
-    //    printf("[INFO] norm_g = %.16lf\n", norm_g);
-    //    printf("%.16lf\n", max_runtime);
-    //}
+    // Output: norm(g) = sqrt( dot(g,g) )
+    double norm_g;
+    dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &norm_g);
+    norm_g = sqrt(norm_g);
+    if (rank==0) {
+        printf("[INFO] norm_g = %.16lf\n", norm_g);
+        printf("%.16lf\n", max_runtime);
+    }
+    print_local2dmesh(chunklength, chunklength, localq, rank, mpi_settings->cartcomm);
 
-    //free(localu);
-    //free(localg);
-    //free(localq);
-    //free(locald);
-    //free(stencil);
-    //free(mpi_settings);
+    free(localu);
+    free(localg);
+    free(localq);
+    free(locald);
+    free(stencil);
+    free(mpi_settings);
     MPI_Finalize();
 
     return 0;
