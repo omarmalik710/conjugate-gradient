@@ -39,7 +39,10 @@ int main(int argc, char **argv) {
 
     int i;
     double q0, tau, q1, beta;
+
     // Step 2: q0 = dot(g,g)
+    MPI_Barrier(MPI_COMM_WORLD);
+    double runtime = MPI_Wtime();
     dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &q0);
     for (int iter=0; iter<MAX_ITERS; iter++) {
         //printf("[RANK %d, Iter %d]\n", rank, iter);
@@ -66,12 +69,18 @@ int main(int argc, char **argv) {
         for (i=0; i<localN; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
         q0 = q1;
     }
+    runtime = MPI_Wtime() - runtime;
+    double max_runtime;
+    MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
     // Output: norm(g) = sqrt( dot(g,g) )
     double norm_g;
     dot(chunk, n+1, localg, localg, rank, MPI_COMM_WORLD, &norm_g);
     norm_g = sqrt(norm_g);
-    printf("[INFO] norm_g = %.16lf\n", norm_g);
+    if (rank==0) {
+        printf("[INFO] norm_g = %.16lf\n", norm_g);
+        printf("%.16lf\n", max_runtime);
+    }
 
     free(localu); free(localg); free(localq);
     free(locald);
