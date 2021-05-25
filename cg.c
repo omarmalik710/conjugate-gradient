@@ -102,7 +102,6 @@ int main(int argc, char **argv) {
         printf("[INFO] norm_g = %.16lf\n", norm_g);
         printf("%.16lf\n", max_runtime);
     }
-    print_local2dmesh(chunklength, chunklength, localq, rank, mpi_settings->cartcomm);
 
     free(localu);
     free(localg);

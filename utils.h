@@ -1,4 +1,4 @@
-#define MAX_ITERS 1
+#define MAX_ITERS 200
 typedef struct my_stencil {
     int size;
     int extent;
