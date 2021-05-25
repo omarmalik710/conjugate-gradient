@@ -4,18 +4,22 @@
 #include <math.h>
 #include "utils.h"
 
-d_struct* init_locald(int n, int chunklength, int wrank, int rrank, int rnumprocs, int crank, int cnumprocs) {
+d_struct* init_locald(int n, int chunklength, int wrank, MPI_Comm cartcomm, int cartsize) {
     d_struct* locald = (d_struct*) malloc(sizeof(d_struct));
     locald->locald = (double*) malloc(chunklength*chunklength*sizeof(double));
+    int coords[2];
+    MPI_Cart_coords(cartcomm, wrank, 2, coords);
+    int carti = coords[0];
+    int cartj = coords[1];
 
-    // Initialize top and bottom pads in column groups. First and
-    // last procs are padded in one direction, while inner ones
+    // Initialize top and bottom pads in cartesian topology. First and
+    // last rows of procs are padded in one direction, while inner rows
     // are padded in two.
-    if ( crank==0 ) {
+    if ( carti==0 ) {
         locald->top_pad = NULL;
         locald->bottom_pad = (double*) calloc(chunklength,sizeof(double));
     }
-    else if ( crank==(cnumprocs-1) ) {
+    else if ( carti==(cartsize-1) ) {
         locald->top_pad = (double*) calloc(chunklength,sizeof(double));
         locald->bottom_pad = NULL;
     }
@@ -24,14 +28,14 @@ d_struct* init_locald(int n, int chunklength, int wrank, int rrank, int rnumproc
         locald->bottom_pad = (double*) calloc(chunklength,sizeof(double));
     }
 
-    // Initialize left and right pads in row groups. First and
-    // last procs are padded in one direction, while inner ones
-    // are padded in two.
-    if ( rrank==0 ) {
+    // Initialize left and right pads in cartesian topology. First and
+    // last columns of procs are padded in one direction, while inner
+    // columns are padded in two.
+    if ( cartj==0 ) {
         locald->left_pad = NULL;
         locald->right_pad = (double*) calloc(chunklength,sizeof(double));
     }
-    else if ( rrank==(rnumprocs-1) ) {
+    else if ( cartj==(cartsize-1) ) {
         locald->left_pad = (double*) calloc(chunklength,sizeof(double));
         locald->right_pad = NULL;
     }
@@ -46,12 +50,12 @@ d_struct* init_locald(int n, int chunklength, int wrank, int rrank, int rnumproc
     double xi, yj;
     double h = (double) 1 / n;
     for (i=0; i<chunklength; ++i) {
-        xi = (i+crank*chunklength)*h;
+        xi = (i+carti*chunklength)*h;
         for (j=0; j<chunklength; ++j) {
-            yj = (j+rrank*chunklength)*h;
+            yj = (j+cartj*chunklength)*h;
             // Account for boundary conditions.
-            if ( (crank==0 && i==0) || (crank==(cnumprocs-1) && i==(chunklength-1)) ||
-                 (rrank==0 && j==0) || (rrank==(rnumprocs-1) && j==(chunklength-1)) ) {
+            if ( (carti==0 && i==0) || (carti==(cartsize-1) && i==(chunklength-1)) ||
+                 (cartj==0 && j==0) || (cartj==(cartsize-1) && j==(chunklength-1)) ) {
                 locald->locald[i*chunklength+j] = 0.0;
             }
             else {
@@ -103,11 +107,16 @@ double* init_localg(int n, double* d, int rank, int chunk) {
     return g;
 }
 
-void print_local2dmesh(int rows, int cols, double* mesh, int wrank, int rrank, int crank) {
+void print_local2dmesh(int rows, int cols, double* mesh, int wrank, MPI_Comm cartcomm) {
+    int coords[2];
+    MPI_Cart_coords(cartcomm, wrank, 2, coords);
+    int carti = coords[0];
+    int cartj = coords[1];
+
     for (int i=0; i<rows; ++i) {
         for (int j=0; j<cols; ++j) {
             if (mesh != NULL) {
-                printf("([%d (%d,%d)] %lf) ", wrank, rrank, crank, mesh[i*cols+j]);
+                printf("([%d (%d,%d)] %lf) ", wrank, carti, cartj, mesh[i*cols+j]);
             }
         }
         putchar('\n');

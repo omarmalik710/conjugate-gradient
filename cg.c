@@ -11,6 +11,7 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int dim[2], period[2], reorder;
     double sqrt_numprocs = sqrt(numprocs);
     if (( rank==0 ) && ( (int)sqrt_numprocs*sqrt_numprocs != numprocs )) {
         printf("[ERROR] Number of processors '%d' is not a perfect square.\n", numprocs);
@@ -26,20 +27,13 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    int color = rank / (int) sqrt_numprocs;
-    int key = rank % (int) sqrt_numprocs;
-
-    int rrank, rnumprocs;
-    MPI_Comm row_comm;
-    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &row_comm);
-    MPI_Comm_size(row_comm, &rnumprocs);
-    MPI_Comm_rank(row_comm, &rrank);
-
-    int crank, cnumprocs;
-    MPI_Comm col_comm;
-    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &col_comm);
-    MPI_Comm_size(col_comm, &cnumprocs);
-    MPI_Comm_rank(col_comm, &crank);
+    // Set up cartesian topology of procs.
+    MPI_Comm cartcomm;
+    int cartsize = (int) sqrt_numprocs;
+    dim[0] = dim[1] = cartsize;
+    period[0] = period[1] = 0;
+    reorder = 1;
+    MPI_Cart_create(MPI_COMM_WORLD, 2, dim, period, reorder, &cartcomm);
 
     int tags[numprocs-1];
     for (int i=0; i<(numprocs-1); ++i) { tags[i] = i; }
@@ -53,8 +47,8 @@ int main(int argc, char **argv) {
     memcpy(stencil->stencil, my_stencil, sizeof(my_stencil));
 
     // Initialize local arrays.
-    d_struct* locald = init_locald(n, chunklength, rank, rrank, rnumprocs, crank, cnumprocs);
-    print_local2dmesh(chunklength, chunklength, locald->locald, rank, rrank, crank);
+    d_struct* locald = init_locald(n, chunklength, rank, cartcomm, cartsize);
+    print_local2dmesh(chunklength, chunklength, locald->locald, rank, cartcomm);
     //double* localg = init_localg(n, locald->locald, rank, chunk);
     //double* localu = (double*) calloc(chunk*(n+1),sizeof(double));
     //double* localq = (double*) calloc(chunk*(n+1),sizeof(double));
