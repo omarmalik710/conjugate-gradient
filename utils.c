@@ -45,31 +45,30 @@ d_struct* init_locald(int n, int rank, int numprocs, int chunk) {
     return locald;
 }
 
-void exchange_boundaries(int n, d_struct* locald, int rank, int numprocs, int chunk) {
+void exchange_boundaries(int n, d_struct* locald, int rank, int numprocs, int chunk, MPI_Request* requests) {
     MPI_Datatype rowtype;
     MPI_Type_contiguous(n+1, MPI_DOUBLE, &rowtype);
     MPI_Type_commit(&rowtype);
 
-    MPI_Status status;
     int tags[numprocs];
     for (int i=0; i<numprocs; ++i) { tags[i] = i; }
 
     double *sendbuf, *recvbuf;
+    // Send from / recv to bottom boundary. First
+    // and intermediate procs will do this.
     if (locald->bottom_pad != NULL) {
-        // Send from / recv to bottom boundary.
         sendbuf = locald->locald + (chunk-1)*(n+1);
         recvbuf = locald->bottom_pad;
-        MPI_Sendrecv(sendbuf, 1, rowtype, rank+1, tags[rank],
-                    recvbuf, 1, rowtype, rank+1, tags[rank+1],
-                    MPI_COMM_WORLD, &status);
+        MPI_Isend(sendbuf, 1, rowtype, rank+1, tags[rank], MPI_COMM_WORLD, requests+rank);
+        MPI_Irecv(recvbuf, 1, rowtype, rank+1, tags[rank+1], MPI_COMM_WORLD, requests+(rank+1));
     }
+    // Send from / recv to top boundary. Last
+    // and intermediate procs will do this.
     if (locald->top_pad != NULL) {
-        // Send from / recv to top boundary.
         sendbuf = locald->locald;
         recvbuf = locald->top_pad;
-        MPI_Sendrecv(sendbuf, 1, rowtype, rank-1, tags[rank],
-                    recvbuf, 1, rowtype, rank-1, tags[rank-1],
-                    MPI_COMM_WORLD, &status);
+        MPI_Isend(sendbuf, 1, rowtype, rank-1, tags[rank], MPI_COMM_WORLD, requests+rank);
+        MPI_Irecv(recvbuf, 1, rowtype, rank-1, tags[rank-1], MPI_COMM_WORLD, requests+(rank-1));
     }
 }
 
@@ -97,12 +96,20 @@ void print_local2dmesh(int rows, int cols, double* mesh, int rank) {
     }
 }
 
-void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int chunk) {
+void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* localq, int rank, int numprocs, int chunk) {
     int stencil_size = my_stencil->size;
     int extent = my_stencil->extent;
     int* stencil = my_stencil->stencil;
 
-    // Apply stencil on inner points.
+    // Exchange top and/ or bottom padded boundaries
+    // using nonblocking communication.
+    MPI_Request requests[numprocs];
+    //MPI_Status statuses[numprocs];
+    MPI_Status status;
+    exchange_boundaries(n, locald, rank, numprocs, chunk, requests);
+
+    // Apply stencil on inner points while exchanging
+    // the padded boundaries above.
     double result;
     int i,j,l,m;
     int index;
@@ -118,6 +125,15 @@ void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* 
             }
             localq[i*(n+1)+j] = result;
         }
+    }
+
+    // Wait for receive of padded boundaries to finish
+    // before applying the stencil on the outer points.
+    if (locald->top_pad != NULL) {
+        MPI_Wait(requests+(rank-1), &status);
+    }
+    if (locald->bottom_pad != NULL) {
+        MPI_Wait(requests+(rank+1), &status);
     }
 
     // Apply stencil on outer points. First proc uses bottom pad,

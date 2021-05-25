@@ -46,8 +46,7 @@ int main(int argc, char **argv) {
 
         // Step 4: q = Ad. Exchange boundaries first
         // before applying the stencil.
-        exchange_boundaries(n, locald, rank, numprocs, chunk);
-        apply_stencil(n, stencil, locald, localq, chunk);
+        apply_stencil(n, stencil, locald, localq, rank, numprocs, chunk);
 
         // Step 5: tau = q0/dot(d,q)
         dot(chunk, n+1, locald->locald, localq, rank, MPI_COMM_WORLD, &tau);
