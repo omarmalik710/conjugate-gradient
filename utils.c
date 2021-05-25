@@ -127,8 +127,9 @@ void apply_stencil(int n, stencil_struct* my_stencil, d_struct* locald, double* 
         }
     }
 
-    // Wait for receive of padded boundaries to finish
-    // before applying the stencil on the outer points.
+    // Wait for receive of padded boundaries from previous (rank-1)
+    // and/or next (rank+1) procs to finish before applying the
+    // stencil on the outer points.
     if (locald->top_pad != NULL) {
         MPI_Wait(requests+(rank-1), &status);
     }
