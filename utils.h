@@ -38,3 +38,4 @@ double* init_localg(const int chunklength, double* d);
 void print_local2dmesh(const int rows, const int cols, double* mesh, const int myrank, MPI_Comm cartcomm);
 void dot(const int rows, const int cols, double* localv, double* localw, MPI_Comm comm, double* result);
 MPI_Settings* init_mpi_settings(int numprocs, int chunklength);
+void free_struct_elems(stencil_struct* stencil, d_struct* locald, MPI_Settings* mpi_settings);

@@ -465,3 +465,18 @@ MPI_Settings* init_mpi_settings(int numprocs, int chunklength) {
 
     return mpi_settings;
 }
+
+void free_struct_elems(stencil_struct* stencil, d_struct* locald, MPI_Settings* mpi_settings) {
+    free(stencil->stencil);
+
+    free(locald->left_pad);
+    free(locald->top_pad);
+    free(locald->locald);
+    free(locald->bottom_pad);
+    free(locald->right_pad);
+
+    free(mpi_settings->itags);
+    free(mpi_settings->jtags);
+    free(mpi_settings->irequests);
+    free(mpi_settings->jrequests);
+}

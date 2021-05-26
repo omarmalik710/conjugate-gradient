@@ -108,6 +108,7 @@ int main(int argc, char **argv) {
     free(localu);
     free(localg);
     free(localq);
+    free_struct_elems(stencil, locald, mpi_settings);
     free(locald);
     free(stencil);
     free(mpi_settings);
