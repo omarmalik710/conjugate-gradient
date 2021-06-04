@@ -179,7 +179,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
             }
         }
 
-        // Use left_pad and top_pad for the left and right neighbors,
+        // Use left_pad and top_pad for the left and top neighbors,
         // but iterate separately and exclude the remaining zero
         // elements in the stencil. (Accounting for the corner elements
         // in the stencil is too tedious; thankfully they are zero!)
@@ -204,7 +204,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
             }
         }
 
-        // Use top_pad and right_pad for the left and right neighbors,
+        // Use top_pad and right_pad for the top and right neighbors,
         // analogously to the left_pad and top_pad case above.
         //// l==0 and m==1 case (stencil[0][1] = -1)
         m = 1;
@@ -272,59 +272,55 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
 void exchange_boundaries(const int chunklength, d_struct* locald, const int myrank, MPI_Settings* mpi_settings) {
 
+    MPI_Comm cartcomm = mpi_settings->cartcomm;
     double *sendbuf, *recvbuf;
+
+    /* HORIZONTAL EXCHANGE */
+    int* itags = mpi_settings->itags;
+    MPI_Request* irequests = mpi_settings->irequests;
+    MPI_Datatype rowtype = mpi_settings->rowtype;
+
     // Send from / recv to bottom neighbor. First
     // and intermediate rows of procs will do this.
-    int toprank, bottomrank;
-    MPI_Cart_shift(mpi_settings->cartcomm, 0, 1, &toprank, &bottomrank);
+    int bottomrank = mpi_settings->bottomrank;
     if (locald->bottom_pad != NULL) {
         sendbuf = locald->locald + (chunklength-1)*chunklength;
         recvbuf = locald->bottom_pad;
-        MPI_Isend(sendbuf, 1, mpi_settings->rowtype, bottomrank,
-                  mpi_settings->itags[myrank], mpi_settings->cartcomm,
-                  (mpi_settings->irequests)+myrank);
-        MPI_Irecv(recvbuf, 1, mpi_settings->rowtype, bottomrank,
-                  mpi_settings->itags[bottomrank], mpi_settings->cartcomm,
-                  (mpi_settings->irequests)+bottomrank);
+        MPI_Isend(sendbuf, 1, rowtype, bottomrank, itags[myrank], cartcomm, irequests+myrank);
+        MPI_Irecv(recvbuf, 1, rowtype, bottomrank, itags[bottomrank], cartcomm, irequests+bottomrank);
     }
     // Send from / recv to top boundary. Last
     // and intermediate rows of procs will do this.
+    int toprank = mpi_settings->toprank;
     if (locald->top_pad != NULL) {
         sendbuf = locald->locald;
         recvbuf = locald->top_pad;
-        MPI_Isend(sendbuf, 1, mpi_settings->rowtype, toprank,
-                  mpi_settings->itags[myrank], mpi_settings->cartcomm,
-                  (mpi_settings->irequests)+myrank);
-        MPI_Irecv(recvbuf, 1, mpi_settings->rowtype, toprank,
-                  mpi_settings->itags[toprank], mpi_settings->cartcomm,
-                  (mpi_settings->irequests)+toprank);
+        MPI_Isend(sendbuf, 1, rowtype, toprank, itags[myrank], cartcomm, irequests+myrank);
+        MPI_Irecv(recvbuf, 1, rowtype, toprank, itags[toprank], cartcomm, irequests+toprank);
     }
 
-    // Send from / recv to left neighbor. First
+    /* VERTICAL EXCHANGE */
+    int* jtags = mpi_settings->jtags;
+    MPI_Request* jrequests = mpi_settings->jrequests;
+    MPI_Datatype coltype = mpi_settings->coltype;
+
+    // Send from / recv to right neighbor. First
     // and intermediate columns of procs will do this.
-    int leftrank, rightrank;
-    MPI_Cart_shift(mpi_settings->cartcomm, 1, 1, &leftrank, &rightrank);
+    int rightrank = mpi_settings->rightrank;
     if (locald->right_pad != NULL) {
         sendbuf = locald->locald + (chunklength-1);
         recvbuf = locald->right_pad;
-        MPI_Isend(sendbuf, 1, mpi_settings->coltype, rightrank,
-                  mpi_settings->jtags[myrank], mpi_settings->cartcomm,
-                  (mpi_settings->jrequests)+myrank);
-        MPI_Irecv(recvbuf, 1, mpi_settings->rowtype, rightrank,
-                  mpi_settings->jtags[rightrank], mpi_settings->cartcomm,
-                  (mpi_settings->jrequests)+rightrank);
+        MPI_Isend(sendbuf, 1, coltype, rightrank, jtags[myrank], cartcomm, jrequests+myrank);
+        MPI_Irecv(recvbuf, 1, rowtype, rightrank, jtags[rightrank], cartcomm, jrequests+rightrank);
     }
     // Send from / recv to left boundary. Last
     // and intermediate columns of procs will do this.
+    int leftrank = mpi_settings->leftrank;
     if (locald->left_pad != NULL) {
         sendbuf = locald->locald;
         recvbuf = locald->left_pad;
-        MPI_Isend(sendbuf, 1, mpi_settings->coltype, leftrank,
-                  mpi_settings->jtags[myrank], mpi_settings->cartcomm,
-                  (mpi_settings->jrequests)+myrank);
-        MPI_Irecv(recvbuf, 1, mpi_settings->rowtype, leftrank,
-                  mpi_settings->jtags[leftrank], mpi_settings->cartcomm,
-                  (mpi_settings->jrequests)+leftrank);
+        MPI_Isend(sendbuf, 1, coltype, leftrank, jtags[myrank], cartcomm, jrequests+myrank);
+        MPI_Irecv(recvbuf, 1, rowtype, leftrank, jtags[leftrank], cartcomm, jrequests+leftrank);
     }
 
 }
