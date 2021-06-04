@@ -13,17 +13,24 @@ void apply_stencil_serial(const int n, stencil_struct* my_stencil, double* d, do
     double result;
     int i,j,l,m;
     int index;
+    int dindexi, dindexj;
     for (i=extent; i<(n+1)-extent; ++i) {
         for (j=extent; j<(n+1)-extent; ++j) {
 
             // Apply stencil on each inner i,j point in the mesh.
             result = 0;
-            for (l=0; l<stencil_size; ++l) {
-                for (m=0; m<stencil_size; ++m) {
-                    index = (i - extent + l)*(n+1) + (j - extent + m);
-                    result += stencil[l*stencil_size+m] * d[index];
-                }
-            }
+
+            dindexi = (i-extent)*(n+1);
+            result += stencil[1] * d[dindexi + (j-extent+1)];
+
+            dindexi += (n+1);
+            result += stencil[3] * d[dindexi + (j-extent+0)];
+            result += stencil[4] * d[dindexi + (j-extent+1)];
+            result += stencil[5] * d[dindexi + (j-extent+2)];
+
+            dindexi += (n+1);
+            result += stencil[7] * d[dindexi + (j-extent+1)];
+
             q[i*(n+1)+j] = result;
         }
     }
@@ -40,19 +47,27 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
     // Apply stencil on inner points while exchanging
     // the padded boundaries above.
+    double* d = locald->locald;
     double result;
     int i,j,l,m;
     int index;
+    int dindexi, dindexj;
     for (i=extent; i<chunklength-extent; ++i) {
         for (j=extent; j<chunklength-extent; ++j) {
 
             result = 0;
-            for (l=0; l<stencil_size; ++l) {
-                for (m=0; m<stencil_size; ++m) {
-                    index = (i - extent + l)*chunklength + (j - extent + m);
-                    result += stencil[l*stencil_size+m] * locald->locald[index];
-                }
-            }
+
+            dindexi = (i-extent)*chunklength;
+            result += stencil[1] * d[dindexi + (j-extent+1)];
+
+            dindexi += chunklength;
+            result += stencil[3] * d[dindexi + (j-extent+0)];
+            result += stencil[4] * d[dindexi + (j-extent+1)];
+            result += stencil[5] * d[dindexi + (j-extent+2)];
+
+            dindexi += chunklength;
+            result += stencil[7] * d[dindexi + (j-extent+1)];
+
             localq[i*chunklength+j] = result;
         }
     }
