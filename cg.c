@@ -38,12 +38,14 @@ int main(int argc, char **argv) {
     memcpy(stencil->stencil, my_stencil, sizeof(my_stencil));
 
     // Initialize local arrays.
-    d_struct* locald = init_locald(n, chunklength, rank, mpi_settings);
-    double* localg = init_localg(chunklength, locald->locald);
+    d_struct* locald_struct = init_locald(n, chunklength, rank, mpi_settings);
+    double* locald = locald_struct->locald;
+    double* localg = init_localg(chunklength, locald);
     double* localu = (double*) calloc(chunklength*chunklength,sizeof(double));
     double* localq = (double*) calloc(chunklength*chunklength,sizeof(double));
 
     int i;
+    int iremain = chunkarea%UNROLL_FACT;
     double q0, tau, q1, beta;
     MPI_Barrier(mpi_settings->cartcomm);
     double runtime = MPI_Wtime();
@@ -53,18 +55,36 @@ int main(int argc, char **argv) {
         dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q0);
         for (int iter=0; iter<MAX_ITERS; iter++) {
             // Step 4: q = Ad using a stencil-based product in serial.
-            apply_stencil_serial(n, stencil, locald->locald, localq);
+            apply_stencil_serial(n, stencil, locald, localq);
 
             // Steps 5-7: calculate tau, then update u and g.
-            dot(chunklength, chunklength, locald->locald, localq, mpi_settings->cartcomm, &tau);
+            dot(chunklength, chunklength, locald, localq, mpi_settings->cartcomm, &tau);
             tau = q0/tau;
-            for (i=0; i<chunkarea; ++i) { localu[i] += tau*(locald->locald[i]); }
-            for (i=0; i<chunkarea; ++i) { localg[i] += tau*localq[i]; }
+            for (i=0; i<iremain; ++i) { localu[i] += tau*locald[i]; }
+            for (i; i<chunkarea; i+=UNROLL_FACT) {
+                localu[i] += tau*locald[i];
+                localu[i+1] += tau*locald[i+1];
+                localu[i+2] += tau*locald[i+2];
+                localu[i+3] += tau*locald[i+3];
+            }
+            for (i=0; i<iremain; ++i) { localg[i] += tau*localq[i]; }
+            for (i; i<chunkarea; i+=UNROLL_FACT) {
+                localg[i] += tau*localq[i];
+                localg[i+1] += tau*localq[i+1];
+                localg[i+2] += tau*localq[i+2];
+                localg[i+3] += tau*localq[i+3];
+            }
 
             // Steps 8-10: calculate beta, then update d.
             dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
             beta = q1/q0;
-            for (i=0; i<chunkarea; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
+            for (i=0; i<iremain; ++i) { locald[i] = beta*locald[i] - localg[i]; }
+            for (i; i<chunkarea; i+=UNROLL_FACT) {
+                locald[i] = beta*locald[i] - localg[i];
+                locald[i+1] = beta*locald[i+1] - localg[i+1];
+                locald[i+2] = beta*locald[i+2] - localg[i+2];
+                locald[i+3] = beta*locald[i+3] - localg[i+3];
+            }
 
             q0 = q1;
         }
@@ -74,18 +94,39 @@ int main(int argc, char **argv) {
         dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q0);
         for (int iter=0; iter<MAX_ITERS; iter++) {
             // Step 4: q = Ad using a stencil-based product in parallel.
-            apply_stencil_parallel(chunklength, stencil, locald, localq, rank, mpi_settings);
+            apply_stencil_parallel(chunklength, stencil, locald_struct, localq, rank, mpi_settings);
 
             // Steps 5-7: calculate tau, then update u and g.
-            dot(chunklength, chunklength, locald->locald, localq, mpi_settings->cartcomm, &tau);
+            dot(chunklength, chunklength, locald, localq, mpi_settings->cartcomm, &tau);
             tau = q0/tau;
-            for (i=0; i<chunkarea; ++i) { localu[i] += tau*(locald->locald[i]); }
-            for (i=0; i<chunkarea; ++i) { localg[i] += tau*localq[i]; }
+            //for (i=0; i<chunkarea; i++) { localu[i] += tau*(locald->locald[i]); }
+            for (i=0; i<iremain; i++) { localu[i] += tau*locald[i]; }
+            for (i; i<chunkarea; i+=UNROLL_FACT) {
+                localu[i] += tau*locald[i];
+                localu[i+1] += tau*locald[i+1];
+                localu[i+2] += tau*locald[i+2];
+                localu[i+3] += tau*locald[i+3];
+            }
+            //for (i=0; i<chunkarea; i++) { localg[i] += tau*localq[i]; }
+            for (i=0; i<iremain; i++) { localg[i] += tau*localq[i]; }
+            for (i; i<chunkarea; i+=UNROLL_FACT) {
+                localg[i] += tau*localq[i];
+                localg[i+1] += tau*localq[i+1];
+                localg[i+2] += tau*localq[i+2];
+                localg[i+3] += tau*localq[i+3];
+            }
 
             // Steps 8-10: calculate beta, then update d.
             dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
             beta = q1/q0;
-            for (i=0; i<chunkarea; ++i) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
+            //for (i=0; i<chunkarea; i++) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
+            for (i=0; i<iremain; i++) { locald[i] = beta*locald[i] - localg[i]; }
+            for (i; i<chunkarea; i+=UNROLL_FACT) {
+                locald[i] = beta*locald[i] - localg[i];
+                locald[i+1] = beta*locald[i+1] - localg[i+1];
+                locald[i+2] = beta*locald[i+2] - localg[i+2];
+                locald[i+3] = beta*locald[i+3] - localg[i+3];
+            }
 
             q0 = q1;
         }
@@ -108,8 +149,8 @@ int main(int argc, char **argv) {
     free(localu);
     free(localg);
     free(localq);
-    free_struct_elems(stencil, locald, mpi_settings);
-    free(locald);
+    free_struct_elems(stencil, locald_struct, mpi_settings);
+    free(locald_struct);
     free(stencil);
     free(mpi_settings);
     MPI_Finalize();
