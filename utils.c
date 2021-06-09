@@ -5,7 +5,7 @@
 #include <assert.h>
 #include "utils.h"
 
-void apply_stencil_serial(const int n, stencil_struct* my_stencil, double* d, double* q) {
+void apply_stencil_serial(const int n, stencil_struct* restrict my_stencil, double* restrict d, double* restrict q) {
     const int extent = my_stencil->extent;
     int* stencil = my_stencil->stencil;
 
@@ -35,7 +35,7 @@ void apply_stencil_serial(const int n, stencil_struct* my_stencil, double* d, do
     }
 }
 
-void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d_struct* locald_struct, double* localq, const int myrank, MPI_Settings* mpi_settings) {
+void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_stencil, d_struct* restrict locald_struct, double* restrict localq, const int myrank, MPI_Settings* restrict mpi_settings) {
     const int stencil_size = my_stencil->size;
     const int extent = my_stencil->extent;
     int* stencil = my_stencil->stencil;
@@ -218,7 +218,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     }
 }
 
-void exchange_boundaries(const int chunklength, d_struct* locald_struct, const int myrank, MPI_Settings* mpi_settings) {
+void exchange_boundaries(const int chunklength, d_struct* restrict locald_struct, const int myrank, MPI_Settings* restrict mpi_settings) {
 
     MPI_Comm cartcomm = mpi_settings->cartcomm;
     double *sendbuf, *recvbuf;
@@ -273,8 +273,8 @@ void exchange_boundaries(const int chunklength, d_struct* locald_struct, const i
 
 }
 
-d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_Settings* mpi_settings) {
-    d_struct* locald_struct = (d_struct*) malloc(sizeof(d_struct));
+d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_Settings* restrict mpi_settings) {
+    d_struct* restrict locald_struct = (d_struct*) malloc(sizeof(d_struct));
     locald_struct->locald = (double*) malloc(chunklength*chunklength*sizeof(double));
 
     MPI_Comm cartcomm = mpi_settings->cartcomm;
@@ -339,8 +339,8 @@ d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_
     return locald_struct;
 }
 
-double* init_localg(const int chunklength, double* locald) {
-    double* localg = (double*) malloc(chunklength*chunklength*sizeof(double));
+double* init_localg(const int chunklength, double* restrict locald) {
+    double* restrict localg = (double*) malloc(chunklength*chunklength*sizeof(double));
     for (int i=0; i<chunklength; ++i) {
         for (int j=0; j<chunklength; ++j) {
             localg[i*chunklength+j] = -locald[i*chunklength+j];
@@ -349,7 +349,7 @@ double* init_localg(const int chunklength, double* locald) {
     return localg;
 }
 
-void print_local2dmesh(const int rows, const int cols, double* mesh, const int myrank, MPI_Comm cartcomm) {
+void print_local2dmesh(const int rows, const int cols, double* restrict mesh, const int myrank, MPI_Comm cartcomm) {
     int coords[2];
     MPI_Cart_coords(cartcomm, myrank, 2, coords);
     const int carti = coords[0];
@@ -365,23 +365,28 @@ void print_local2dmesh(const int rows, const int cols, double* mesh, const int m
     }
 }
 
-void dot(const int rows, const int cols, double* localv, double* localw, MPI_Comm comm, double* result) {
+void dot(const int rows, const int cols, double* restrict localv, double* restrict localw, MPI_Comm comm, double* restrict result) {
     int N = rows*cols;
-    int i;
-    int iremain = N%UNROLL_FACT;
+    int i, istart;
+    int iblock;
+    int numblocks = N/BLOCK_SIZE;
+    int blockremain = N%BLOCK_SIZE;
     double localsum = 0.0;
-    for (i=0; i<iremain; ++i) { localsum += localv[i]*localw[i]; }
-    for (i; i<N; i+=UNROLL_FACT) {
-        localsum += localv[i]*localw[i];
-        localsum += localv[i+1]*localw[i+1];
-        localsum += localv[i+2]*localw[i+2];
-        localsum += localv[i+3]*localw[i+3];
+    for (i=0; i<blockremain; ++i) { localsum += localv[i]*localw[i]; }
+    for (iblock=0; iblock<numblocks; iblock++) {
+        istart = blockremain + iblock*BLOCK_SIZE;
+        for (i=istart; i<(istart+BLOCK_SIZE); i+=UNROLL_FACT) {
+            localsum += localv[i]*localw[i];
+            localsum += localv[i+1]*localw[i+1];
+            localsum += localv[i+2]*localw[i+2];
+            localsum += localv[i+3]*localw[i+3];
+        }
     }
     MPI_Allreduce(&localsum, result, 1, MPI_DOUBLE, MPI_SUM, comm);
 }
 
 MPI_Settings* init_mpi_settings(int numprocs, int chunklength) {
-    MPI_Settings* mpi_settings = (MPI_Settings*) malloc(sizeof(MPI_Settings));
+    MPI_Settings* restrict mpi_settings = (MPI_Settings*) malloc(sizeof(MPI_Settings));
 
     // All matrices are stored row-wise, so row datatype should be contiguous.
     MPI_Type_contiguous(chunklength, MPI_DOUBLE, &(mpi_settings->rowtype));
@@ -419,7 +424,7 @@ MPI_Settings* init_mpi_settings(int numprocs, int chunklength) {
     return mpi_settings;
 }
 
-void free_struct_elems(stencil_struct* stencil, d_struct* locald, MPI_Settings* mpi_settings) {
+void free_struct_elems(stencil_struct* restrict stencil, d_struct* restrict locald, MPI_Settings* restrict mpi_settings) {
     free(stencil->stencil);
 
     free(locald->left_pad);
