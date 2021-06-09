@@ -70,42 +70,41 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     double result;
     int i,j,l,m;
     int index;
+    int dindexi;
 
     //// Non-corner points: first row (i==0).
     if (locald_struct->top_pad != NULL) {
+        i = 0;
+        dindexi = (i-extent)*chunklength;
         for (j=extent; j<chunklength-extent; ++j) {
             result = 0;
-            // Handle left, bottom, and right neighbors as usual.
-            for (l=1; l<stencil_size; ++l) {
-                for (m=0; m<stencil_size; ++m) {
-                    index = (-extent + l)*chunklength + (j - extent + m);
-                    result += stencil[l*stencil_size+m] * locald[index];
-                }
-            }
-            // Use top_pad for the top neighbors (l==0).
-            for (m=0; m<stencil_size; ++m) {
-                index = j - extent + m;
-                result += stencil[m] * locald_struct->top_pad[index];
-            }
+
+            result += stencil[1] * locald_struct->top_pad[j-extent+1];
+
+            result += stencil[3] * locald[dindexi+chunklength + (j-extent+0)];
+            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+            result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
+
+            result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+
             localq[j] = result;
         }
     }
     //// Non-corner points: last row (i==chunk-extent).
     if (locald_struct->bottom_pad != NULL) {
+        i = chunklength - extent;
+        dindexi = (i-extent)*chunklength;
         for (j=extent; j<chunklength-extent; ++j) {
             result = 0;
-            // Handle left, top, and right neighbors as usual.
-            for (l=0; l<stencil_size-1; ++l) {
-                for (m=0; m<stencil_size; ++m) {
-                    index = (i - extent + l)*chunklength + (j - extent + m);
-                    result += stencil[l*stencil_size+m] * locald[index];
-                }
-            }
-            // Use bottom_pad for the bottom neighbors (l==stencil_size-1).
-            for (m=0; m<stencil_size; ++m) {
-                index = j - extent + m;
-                result += stencil[l*stencil_size+m] * locald_struct->bottom_pad[index];
-            }
+
+            result += stencil[1] * locald[dindexi + (j-extent+1)];
+
+            result += stencil[3] * locald[dindexi+chunklength + (j-extent+0)];
+            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+            result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
+
+            result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
+
             localq[i*chunklength+j] = result;
         }
     }
@@ -126,39 +125,37 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
     //// Non-corner points: first column (j==0).
     if (locald_struct->left_pad != NULL) {
+        j = 0;
         for (i=extent; i<chunklength-extent; ++i) {
+            dindexi = (i-extent)*chunklength;
             result = 0;
-            // Handle top, bottom, and right neighbors as usual.
-            for (l=0; l<stencil_size; ++l) {
-                for (m=1; m<stencil_size; ++m) {
-                    index = (i - extent + l)*chunklength + (-extent + m);
-                    result += stencil[l*stencil_size+m] * locald[index];
-                }
-            }
-            // Use left_pad for the left neighbors (m==0).
-            for (l=0; l<stencil_size; ++l) {
-                index = i - extent + l;
-                result += stencil[l*stencil_size] * locald_struct->left_pad[index];
-            }
+
+            result += stencil[1] * locald[dindexi + (j-extent+1)];
+
+            result += stencil[3] * locald_struct->left_pad[i];
+            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+            result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
+
+            result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+
             localq[i*chunklength] = result;
         }
     }
     //// Non-corner points: last column (j==chunklength-extent).
     if (locald_struct->right_pad != NULL) {
+        j = chunklength - extent;
         for (i=extent; i<chunklength-extent; ++i) {
+            dindexi = (i-extent)*chunklength;
             result = 0;
-            // Handle left, top, and bottom neighbors as usual.
-            for (l=0; l<stencil_size; ++l) {
-                for (m=0; m<stencil_size-1; ++m) {
-                    index = (i - extent + l)*chunklength + (j - extent + m);
-                    result += stencil[l*stencil_size+m] * locald[index];
-                }
-            }
-            // Use right_pad for the right neighbors (m==stencil_size-1).
-            for (l=0; l<stencil_size; ++l) {
-                index = i - extent + l;
-                result += stencil[l*stencil_size+m] * locald_struct->right_pad[index];
-            }
+
+            result += stencil[1] * locald[dindexi + (j-extent+1)];
+
+            result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
+            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+            result += stencil[5] * locald_struct->right_pad[i];
+
+            result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+
             localq[i*chunklength+j] = result;
         }
     }
@@ -215,8 +212,8 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     }
 
     //// Corner points: bottom-left corner (i==chunklength-extent, j==0)
-    i = chunklength - extent;
     if (locald_struct->left_pad != NULL && locald_struct->bottom_pad != NULL) {
+        i = chunklength - extent;
         result = 0;
         // Handle right and bottom neighbors as usual.
         for (l=0; l<stencil_size-1; ++l) {
@@ -240,9 +237,9 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     }
 
     //// Corner points: bottom-right corner (i==chunklength-extent, j==chunklength-extent)
-    i = chunklength - extent;
-    j = chunklength - extent;
     if (locald_struct->bottom_pad != NULL && locald_struct->right_pad != NULL) {
+        i = chunklength - extent;
+        j = chunklength - extent;
         result = 0;
         // Handle right and bottom neighbors as usual.
         for (l=0; l<stencil_size-1; ++l) {
