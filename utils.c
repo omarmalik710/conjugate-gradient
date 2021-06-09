@@ -6,30 +6,31 @@
 #include "utils.h"
 
 void apply_stencil_serial(const int n, stencil_struct* my_stencil, double* d, double* q) {
-    const int stencil_size = my_stencil->size;
     const int extent = my_stencil->extent;
     int* stencil = my_stencil->stencil;
 
     double result;
-    int i,j,l,m;
-    int index;
-    int dindexi, dindexj;
+    int i,j;
+    int dindexi;
     for (i=extent; i<(n+1)-extent; ++i) {
+        // dindexi iterates over the stencil's rows. It is stored
+        // separately to avoid repeated multiplications, which
+        // are quite expensive.
+        dindexi = (i-extent)*(n+1);
         for (j=extent; j<(n+1)-extent; ++j) {
 
-            // Apply stencil on each inner i,j point in the mesh.
+            // Applying the stencil application on the inner points is the main
+            // bottleneck of the code. Replacing the double loops with the 5-line
+            // explicit stencil computation will significantly improve performance.
             result = 0;
 
-            dindexi = (i-extent)*(n+1);
             result += stencil[1] * d[dindexi + (j-extent+1)];
 
-            dindexi += (n+1);
-            result += stencil[3] * d[dindexi + (j-extent+0)];
-            result += stencil[4] * d[dindexi + (j-extent+1)];
-            result += stencil[5] * d[dindexi + (j-extent+2)];
+            result += stencil[3] * d[dindexi+(n+1) + (j-extent+0)];
+            result += stencil[4] * d[dindexi+(n+1) + (j-extent+1)];
+            result += stencil[5] * d[dindexi+(n+1) + (j-extent+2)];
 
-            dindexi += (n+1);
-            result += stencil[7] * d[dindexi + (j-extent+1)];
+            result += stencil[7] * d[dindexi+(n+1)+(n+1) + (j-extent+1)];
 
             q[i*(n+1)+j] = result;
         }
@@ -45,40 +46,14 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
     // using nonblocking communication.
     exchange_boundaries(chunklength, locald_struct, myrank, mpi_settings);
 
-    double* locald = locald_struct->locald;
-    double result;
-    int i,j,l,m;
-    int index;
-    int dindexi, dindexj;
-
     // Apply stencil on inner points while exchanging
     // the padded boundaries.
-    for (i=extent; i<chunklength-extent; ++i) {
-        dindexi = (i-extent)*chunklength;
-        for (j=extent; j<chunklength-extent; ++j) {
+    double* locald = locald_struct->locald;
+    apply_stencil_serial(chunklength-1, my_stencil, locald, localq);
 
-            result = 0;
-
-            result += stencil[1] * locald[dindexi + (j-extent+1)];
-
-            result += stencil[3] * locald[(dindexi+chunklength) + (j-extent+0)];
-            result += stencil[4] * locald[(dindexi+chunklength) + (j-extent+1)];
-            result += stencil[5] * locald[(dindexi+chunklength) + (j-extent+2)];
-
-            result += stencil[7] * locald[(dindexi+chunklength+chunklength) + (j-extent+1)];
-
-            localq[i*chunklength+j] = result;
-        }
-    }
-
-    // Apply stencil on outer points. Use left, top, bottom, and/or
-    // right pads when applicable. Non-corner points use 1 of the 4
-    // padded arrays. Corner points use 2 of them. Both cases will be
-    // explicitly handled here.
-
-    // Wait for receive of padded boundaries from the top
-    // and/or bottom neighbors to finish before applying the
-    // stencil on the first and last rows.
+    // Wait for receive of padded boundaries from the left, top,
+    // bottom, and/or right neighbors to finish before applying the
+    // stencil on the outer points.
     if (locald_struct->top_pad != NULL) {
         MPI_Wait((mpi_settings->irequests)+(mpi_settings->toprank),
                  &(mpi_settings->status));
@@ -87,6 +62,14 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
         MPI_Wait((mpi_settings->irequests)+(mpi_settings->bottomrank),
                  &(mpi_settings->status));
     }
+
+    // Apply stencil on outer points. Use left, top, bottom, and/or
+    // right pads when applicable. Non-corner points use 1 of the 4
+    // padded arrays. Corner points use 2 of them. Both cases will be
+    // explicitly handled here.
+    double result;
+    int i,j,l,m;
+    int index;
 
     //// Non-corner points: first row (i==0).
     if (locald_struct->top_pad != NULL) {
@@ -353,15 +336,15 @@ d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_
     // Initialize top and bottom pads in cartesian topology. First and
     // last rows of procs are padded in one direction, while inner rows
     // are padded in two.
-    if ( carti==0 ) {
+    if ( carti==0 ) { // First row of processors.
         locald_struct->top_pad = NULL;
         locald_struct->bottom_pad = (double*) calloc(chunklength,sizeof(double));
     }
-    else if ( carti==(cartsize-1) ) {
+    else if ( carti==(cartsize-1) ) { // Last row of processors.
         locald_struct->top_pad = (double*) calloc(chunklength,sizeof(double));
         locald_struct->bottom_pad = NULL;
     }
-    else {
+    else { // Intermediate processors.
         locald_struct->top_pad = (double*) calloc(chunklength,sizeof(double));
         locald_struct->bottom_pad = (double*) calloc(chunklength,sizeof(double));
     }
@@ -369,15 +352,15 @@ d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_
     // Initialize left and right pads in cartesian topology. First and
     // last columns of procs are padded in one direction, while inner
     // columns are padded in two.
-    if ( cartj==0 ) {
+    if ( cartj==0 ) { // First column of processors.
         locald_struct->left_pad = NULL;
         locald_struct->right_pad = (double*) calloc(chunklength,sizeof(double));
     }
-    else if ( cartj==(cartsize-1) ) {
+    else if ( cartj==(cartsize-1) ) { // Last column of processors.
         locald_struct->left_pad = (double*) calloc(chunklength,sizeof(double));
         locald_struct->right_pad = NULL;
     }
-    else {
+    else { // Intermediate columns of processors.
         locald_struct->left_pad = (double*) calloc(chunklength,sizeof(double));
         locald_struct->right_pad = (double*) calloc(chunklength,sizeof(double));
     }
