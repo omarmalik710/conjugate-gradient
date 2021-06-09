@@ -32,7 +32,7 @@ void apply_stencil_serial(const int n, stencil_struct* my_stencil, double* d, do
 
             result += stencil[7] * d[dindexi+(n+1)+(n+1) + (j-extent+1)];
 
-            q[(dindexi+extent)+j] = result;
+            q[dindexi+(n+1) + j] = result;
         }
     }
 }
@@ -105,7 +105,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
             result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
 
-            localq[(dindexi+extent)+j] = result;
+            localq[dindexi+chunklength + j] = result;
         }
     }
 
@@ -138,7 +138,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
             result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
 
-            localq[dindexi+extent] = result;
+            localq[dindexi+chunklength] = result;
         }
     }
     //// Non-corner points: last column (j==chunklength-extent).
@@ -156,7 +156,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
             result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
 
-            localq[(dindexi+extent)+j] = result;
+            localq[dindexi+chunklength + j] = result;
         }
     }
 
