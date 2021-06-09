@@ -25,11 +25,9 @@ void apply_stencil_serial(const int n, stencil_struct* my_stencil, double* d, do
             result = 0;
 
             result += stencil[1] * d[dindexi + (j-extent+1)];
-
             result += stencil[3] * d[dindexi+(n+1) + (j-extent+0)];
             result += stencil[4] * d[dindexi+(n+1) + (j-extent+1)];
             result += stencil[5] * d[dindexi+(n+1) + (j-extent+2)];
-
             result += stencil[7] * d[dindexi+(n+1)+(n+1) + (j-extent+1)];
 
             q[dindexi+(n+1) + j] = result;
@@ -80,11 +78,9 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
             result = 0;
 
             result += stencil[1] * locald_struct->top_pad[j-extent+1];
-
             result += stencil[3] * locald[dindexi+chunklength + (j-extent+0)];
             result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
             result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-
             result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
 
             localq[j] = result;
@@ -98,11 +94,9 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
             result = 0;
 
             result += stencil[1] * locald[dindexi + (j-extent+1)];
-
             result += stencil[3] * locald[dindexi+chunklength + (j-extent+0)];
             result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
             result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-
             result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
 
             localq[dindexi+chunklength + j] = result;
@@ -131,11 +125,9 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
             result = 0;
 
             result += stencil[1] * locald[dindexi + (j-extent+1)];
-
             result += stencil[3] * locald_struct->left_pad[i];
             result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
             result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-
             result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
 
             localq[dindexi+chunklength] = result;
@@ -149,11 +141,9 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
             result = 0;
 
             result += stencil[1] * locald[dindexi + (j-extent+1)];
-
             result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
             result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
             result += stencil[5] * locald_struct->right_pad[i];
-
             result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
 
             localq[dindexi+chunklength + j] = result;
@@ -164,103 +154,67 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* my_stencil, d
 
     //// Corner points: top-left corner (i==0, j==0)
     if (locald_struct->left_pad != NULL && locald_struct->top_pad != NULL) {
+        i = 0;
+        j = 0;
+        dindexi = (i-extent)*chunklength;
         result = 0;
-        // Handle right and bottom neighbors as usual.
-        for (l=1; l<stencil_size; ++l) {
-            for (m=1; m<stencil_size; ++m) {
-                index = (-extent + l)*chunklength + (-extent + m);
-                result += stencil[l*stencil_size+m] * locald[index];
-            }
-        }
 
-        // Use left_pad and top_pad for the left and top neighbors,
-        // but iterate separately and exclude the remaining zero
-        // elements in the stencil. (Accounting for the corner elements
-        // in the stencil is too tedious; thankfully they are zero!)
-        //// l==1 and m==0 case (stencil[1][0] = -1)
-        index = 0;
-        result += stencil[stencil_size] * locald_struct->left_pad[index];
-        //// l==0 and m==1 case (stencil[0][1] = -1)
-        index = 0 ;
-        result += stencil[1] * locald_struct->top_pad[index];
+        result += stencil[1] * locald_struct->top_pad[j-extent+1];
+        result += stencil[3] * locald_struct->left_pad[i];
+        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+        result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
+        result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+
         localq[0] = result;
     }
 
     //// Corner points: top-right corner (i==0, j==chunklength-extent)
     j = chunklength - extent;
     if (locald_struct->top_pad != NULL && locald_struct->right_pad != NULL) {
+        i = 0;
+        j = chunklength - extent;
+        dindexi = (i-extent)*chunklength;
         result = 0;
-        // Handle left and bottom neighbors as usual.
-        for (l=1; l<stencil_size; ++l) {
-            for (m=0; m<stencil_size-1; ++m) {
-                index = (-extent + l)*chunklength + (j - extent + m);
-                result += stencil[l*stencil_size+m] * locald[index];
-            }
-        }
 
-        // Use top_pad and right_pad for the top and right neighbors,
-        // analogously to the left_pad and top_pad case above.
-        //// l==0 and m==1 case (stencil[0][1] = -1)
-        m = 1;
-        index = chunklength - extent ;
-        result += stencil[m] * locald_struct->top_pad[index];
-        //// l==1 and m==stencil_size-1 case (stencil[1][stencil_size-1] = -1)
-        m = stencil_size - 1;
-        index = 0;
-        result += stencil[stencil_size+m] * locald_struct->right_pad[index];
+        result += stencil[1] * locald_struct->top_pad[j-extent+1];
+        result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
+        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+        result += stencil[5] * locald_struct->right_pad[i];
+        result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+
         localq[j] = result;
     }
 
     //// Corner points: bottom-left corner (i==chunklength-extent, j==0)
     if (locald_struct->left_pad != NULL && locald_struct->bottom_pad != NULL) {
         i = chunklength - extent;
+        j = 0;
+        dindexi = (i-extent)*chunklength;
         result = 0;
-        // Handle right and bottom neighbors as usual.
-        for (l=0; l<stencil_size-1; ++l) {
-            for (m=1; m<stencil_size; ++m) {
-                index = (i - extent + l)*chunklength + (-extent + m);
-                result += stencil[l*stencil_size+m] * locald[index];
-            }
-        }
 
-        // Use left_pad and bottom_pad for the left and bottom neighbors,
-        // analogous to the left_pad and top_pad case above.
-        //// l==1 and m==0 case (stencil[1][0] = -1)
-        index = chunklength - extent;
-        result += stencil[stencil_size] * locald_struct->left_pad[index];
-        //// l==stencil_size-1 and m==1 case (stencil[stencil_size-1][1] = -1)
-        l = stencil_size - 1;
-        m = 1;
-        index = 0;
-        result += stencil[l*stencil_size+m] * locald_struct->bottom_pad[index];
-        localq[i*chunklength] = result;
+        result += stencil[1] * locald[dindexi + (j-extent+1)];
+        result += stencil[3] * locald_struct->left_pad[i];
+        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+        result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
+        result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
+
+        localq[dindexi+chunklength] = result;
     }
 
     //// Corner points: bottom-right corner (i==chunklength-extent, j==chunklength-extent)
     if (locald_struct->bottom_pad != NULL && locald_struct->right_pad != NULL) {
         i = chunklength - extent;
         j = chunklength - extent;
+        dindexi = (i-extent)*chunklength;
         result = 0;
-        // Handle right and bottom neighbors as usual.
-        for (l=0; l<stencil_size-1; ++l) {
-            for (m=0; m<stencil_size-1; ++m) {
-                index = (i - extent + l)*chunklength + (j - extent + m);
-                result += stencil[l*stencil_size+m] * locald[index];
-            }
-        }
 
-        // Use bottom_pad and right_pad for the right and bottom neighbors,
-        // analogous to the left_pad and top_pad case above.
-        //// l==stencil_size-1 and m==1 case (stencil[stencil_size-1][1] = -1)
-        l = stencil_size - 1;
-        m = 1;
-        index = chunklength - extent;
-        result += stencil[l*stencil_size+m] * locald_struct->bottom_pad[index];
-        //// l==1 and m==stencil_size-1 case (stencil[1][stencil_size-1] = -1)
-        m = stencil_size - 1;
-        index = chunklength - extent;
-        result += stencil[stencil_size+m] * locald_struct->right_pad[index];
-        localq[i*chunklength+j] = result;
+        result += stencil[1] * locald[dindexi + (j-extent+1)];
+        result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
+        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
+        result += stencil[5] * locald_struct->right_pad[i];
+        result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
+
+        localq[dindexi+chunklength + j] = result;
     }
 }
 
