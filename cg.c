@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
             // Step 4: q = Ad using a stencil-based product in serial.
             apply_stencil_serial(n, stencil, locald, localq);
 
-            // Steps 5-7: calculate tau, then update u and g.
+            // Steps 5-7: calculate tau, then update u and g with loop unrolling.
             dot(chunklength, chunklength, locald, localq, mpi_settings->cartcomm, &tau);
             tau = q0/tau;
             for (i=0; i<iremain; ++i) { localu[i] += tau*locald[i]; }
@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
                 localg[i+3] += tau*localq[i+3];
             }
 
-            // Steps 8-10: calculate beta, then update d.
+            // Steps 8-10: calculate beta, then update d with loop unrolling.
             dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
             beta = q1/q0;
             for (i=0; i<iremain; ++i) { locald[i] = beta*locald[i] - localg[i]; }
@@ -96,10 +96,9 @@ int main(int argc, char **argv) {
             // Step 4: q = Ad using a stencil-based product in parallel.
             apply_stencil_parallel(chunklength, stencil, locald_struct, localq, rank, mpi_settings);
 
-            // Steps 5-7: calculate tau, then update u and g.
+            // Steps 5-7: calculate tau, then update u and g with loop unrolling.
             dot(chunklength, chunklength, locald, localq, mpi_settings->cartcomm, &tau);
             tau = q0/tau;
-            //for (i=0; i<chunkarea; i++) { localu[i] += tau*(locald->locald[i]); }
             for (i=0; i<iremain; i++) { localu[i] += tau*locald[i]; }
             for (i; i<chunkarea; i+=UNROLL_FACT) {
                 localu[i] += tau*locald[i];
@@ -107,7 +106,6 @@ int main(int argc, char **argv) {
                 localu[i+2] += tau*locald[i+2];
                 localu[i+3] += tau*locald[i+3];
             }
-            //for (i=0; i<chunkarea; i++) { localg[i] += tau*localq[i]; }
             for (i=0; i<iremain; i++) { localg[i] += tau*localq[i]; }
             for (i; i<chunkarea; i+=UNROLL_FACT) {
                 localg[i] += tau*localq[i];
@@ -116,10 +114,9 @@ int main(int argc, char **argv) {
                 localg[i+3] += tau*localq[i+3];
             }
 
-            // Steps 8-10: calculate beta, then update d.
+            // Steps 8-10: calculate beta, then update d with loop unrolling.
             dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &q1);
             beta = q1/q0;
-            //for (i=0; i<chunkarea; i++) { locald->locald[i] = beta*(locald->locald[i]) - localg[i]; }
             for (i=0; i<iremain; i++) { locald[i] = beta*locald[i] - localg[i]; }
             for (i; i<chunkarea; i+=UNROLL_FACT) {
                 locald[i] = beta*locald[i] - localg[i];
@@ -138,11 +135,8 @@ int main(int argc, char **argv) {
     //print_local2dmesh(chunklength, chunklength, localu, rank, mpi_settings->cartcomm);
 
     // Output: norm(g) = sqrt( dot(g,g) )
-    double norm_g;
-    dot(chunklength, chunklength, localg, localg, mpi_settings->cartcomm, &norm_g);
-    norm_g = sqrt(norm_g);
     if (rank==0) {
-        printf("[INFO] norm_g = %.16lf\n", norm_g);
+        printf("[INFO] norm_g^2 = %.16lf\n", q1);
         printf("%.16lf\n", max_runtime);
     }
 
