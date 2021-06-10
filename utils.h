@@ -2,12 +2,6 @@
 #define UNROLL_FACT 4
 #define BLOCK_SIZE 32
 
-typedef struct my_stencil {
-    int size;
-    int extent;
-    int* restrict stencil;
-} stencil_struct;
-
 typedef struct my_d {
     double* restrict left_pad;
     double* restrict top_pad;
@@ -33,12 +27,12 @@ typedef struct my_MPI_Settings {
     MPI_Comm cartcomm;
 } MPI_Settings;
 
-void apply_stencil_serial(int n, stencil_struct* restrict my_stencil, double* restrict d, double* restrict q);
-void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_stencil, d_struct* restrict locald, double* restrict localq, const int myrank, MPI_Settings* restrict mpi_settings);
+void apply_stencil_serial(int n, int* restrict stencil, double* restrict d, double* restrict q);
+void apply_stencil_parallel(const int chunklength, int* restrict stencil, d_struct* restrict locald, double* restrict localq, const int myrank, MPI_Settings* restrict mpi_settings);
 void exchange_boundaries(const int chunklength, d_struct* restrict locald, const int myrank, MPI_Settings* restrict mpi_settings);
 d_struct* init_locald(const int n, const int chunklength, const int myrank, MPI_Settings* restrict mpi_settings);
 double* init_localg(const int chunklength, double* restrict d);
 void print_local2dmesh(const int rows, const int cols, double* restrict mesh, const int myrank, MPI_Comm cartcomm);
 void dot(const int rows, const int cols, double* restrict localv, double* restrict localw, MPI_Comm comm, double* restrict result);
 MPI_Settings* init_mpi_settings(int numprocs, int chunklength);
-void free_struct_elems(stencil_struct* restrict stencil, d_struct* restrict locald, MPI_Settings* restrict mpi_settings);
+void free_struct_elems(d_struct* restrict locald, MPI_Settings* restrict mpi_settings);

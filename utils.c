@@ -5,40 +5,35 @@
 #include <assert.h>
 #include "utils.h"
 
-void apply_stencil_serial(const int n, stencil_struct* restrict my_stencil, double* restrict d, double* restrict q) {
-    const int extent = my_stencil->extent;
-    int* stencil = my_stencil->stencil;
+void apply_stencil_serial(const int n, int* restrict stencil, double* restrict d, double* restrict q) {
 
     double result;
     int i,j;
     int dindexi;
-    for (i=extent; i<(n+1)-extent; ++i) {
+    for (i=1; i<n; ++i) {
         // dindexi iterates over the stencil's rows. It is stored
         // separately to avoid repeated multiplications, which
         // are quite expensive.
-        dindexi = (i-extent)*(n+1);
-        for (j=extent; j<(n+1)-extent; ++j) {
+        dindexi = (i-1)*(n+1);
+        for (j=1; j<n; ++j) {
 
             // Applying the stencil application on the inner points is the main
             // bottleneck of the code. Replacing the double loops with the 5-line
             // explicit stencil computation will significantly improve performance.
             result = 0;
 
-            result += stencil[1] * d[dindexi + (j-extent+1)];
-            result += stencil[3] * d[dindexi+(n+1) + (j-extent+0)];
-            result += stencil[4] * d[dindexi+(n+1) + (j-extent+1)];
-            result += stencil[5] * d[dindexi+(n+1) + (j-extent+2)];
-            result += stencil[7] * d[dindexi+(n+1)+(n+1) + (j-extent+1)];
+            result += stencil[0] * d[dindexi + (j-1+1)];
+            result += stencil[1] * d[dindexi+(n+1) + (j-1+0)];
+            result += stencil[2] * d[dindexi+(n+1) + (j-1+1)];
+            result += stencil[3] * d[dindexi+(n+1) + (j-1+2)];
+            result += stencil[4] * d[dindexi+(n+1)+(n+1) + (j-1+1)];
 
             q[dindexi+(n+1) + j] = result;
         }
     }
 }
 
-void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_stencil, d_struct* restrict locald_struct, double* restrict localq, const int myrank, MPI_Settings* restrict mpi_settings) {
-    const int stencil_size = my_stencil->size;
-    const int extent = my_stencil->extent;
-    int* stencil = my_stencil->stencil;
+void apply_stencil_parallel(const int chunklength, int* restrict stencil, d_struct* restrict locald_struct, double* restrict localq, const int myrank, MPI_Settings* restrict mpi_settings) {
 
     // Exchange top and/ or bottom padded boundaries
     // using nonblocking communication.
@@ -47,7 +42,7 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_s
     // Apply stencil on inner points while exchanging
     // the padded boundaries.
     double* locald = locald_struct->locald;
-    apply_stencil_serial(chunklength-1, my_stencil, locald, localq);
+    apply_stencil_serial(chunklength-1, stencil, locald, localq);
 
     // Wait for receive of padded boundaries from the left, top,
     // bottom, and/or right neighbors to finish before applying the
@@ -73,31 +68,31 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_s
     //// Non-corner points: first row (i==0).
     if (locald_struct->top_pad != NULL) {
         i = 0;
-        dindexi = (i-extent)*chunklength;
-        for (j=extent; j<chunklength-extent; ++j) {
+        dindexi = (i-1)*chunklength;
+        for (j=1; j<chunklength-1; ++j) {
             result = 0;
 
-            result += stencil[1] * locald_struct->top_pad[j-extent+1];
-            result += stencil[3] * locald[dindexi+chunklength + (j-extent+0)];
-            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-            result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-            result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+            result += stencil[0] * locald_struct->top_pad[j-1+1];
+            result += stencil[1] * locald[dindexi+chunklength + (j-1+0)];
+            result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+            result += stencil[3] * locald[dindexi+chunklength + (j-1+2)];
+            result += stencil[4] * locald[dindexi+chunklength+chunklength + (j-1+1)];
 
             localq[j] = result;
         }
     }
-    //// Non-corner points: last row (i==chunk-extent).
+    //// Non-corner points: last row (i==chunk-1).
     if (locald_struct->bottom_pad != NULL) {
-        i = chunklength - extent;
-        dindexi = (i-extent)*chunklength;
-        for (j=extent; j<chunklength-extent; ++j) {
+        i = chunklength - 1;
+        dindexi = (i-1)*chunklength;
+        for (j=1; j<chunklength-1; ++j) {
             result = 0;
 
-            result += stencil[1] * locald[dindexi + (j-extent+1)];
-            result += stencil[3] * locald[dindexi+chunklength + (j-extent+0)];
-            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-            result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-            result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
+            result += stencil[0] * locald[dindexi + (j-1+1)];
+            result += stencil[1] * locald[dindexi+chunklength + (j-1+0)];
+            result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+            result += stencil[3] * locald[dindexi+chunklength + (j-1+2)];
+            result += stencil[4] * locald_struct->bottom_pad[j-1+1];
 
             localq[dindexi+chunklength + j] = result;
         }
@@ -120,31 +115,31 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_s
     //// Non-corner points: first column (j==0).
     if (locald_struct->left_pad != NULL) {
         j = 0;
-        for (i=extent; i<chunklength-extent; ++i) {
-            dindexi = (i-extent)*chunklength;
+        for (i=1; i<chunklength-1; ++i) {
+            dindexi = (i-1)*chunklength;
             result = 0;
 
-            result += stencil[1] * locald[dindexi + (j-extent+1)];
-            result += stencil[3] * locald_struct->left_pad[i];
-            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-            result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-            result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+            result += stencil[0] * locald[dindexi + (j-1+1)];
+            result += stencil[1] * locald_struct->left_pad[i];
+            result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+            result += stencil[3] * locald[dindexi+chunklength + (j-1+2)];
+            result += stencil[4] * locald[dindexi+chunklength+chunklength + (j-1+1)];
 
             localq[dindexi+chunklength] = result;
         }
     }
-    //// Non-corner points: last column (j==chunklength-extent).
+    //// Non-corner points: last column (j==chunklength-1).
     if (locald_struct->right_pad != NULL) {
-        j = chunklength - extent;
-        for (i=extent; i<chunklength-extent; ++i) {
-            dindexi = (i-extent)*chunklength;
+        j = chunklength - 1;
+        for (i=1; i<chunklength-1; ++i) {
+            dindexi = (i-1)*chunklength;
             result = 0;
 
-            result += stencil[1] * locald[dindexi + (j-extent+1)];
-            result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
-            result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-            result += stencil[5] * locald_struct->right_pad[i];
-            result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+            result += stencil[0] * locald[dindexi + (j-1+1)];
+            result += stencil[1] * locald[dindexi+chunklength + (j-1)];
+            result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+            result += stencil[3] * locald_struct->right_pad[i];
+            result += stencil[4] * locald[dindexi+chunklength+chunklength + (j-1+1)];
 
             localq[dindexi+chunklength + j] = result;
         }
@@ -156,63 +151,63 @@ void apply_stencil_parallel(const int chunklength, stencil_struct* restrict my_s
     if (locald_struct->left_pad != NULL && locald_struct->top_pad != NULL) {
         i = 0;
         j = 0;
-        dindexi = (i-extent)*chunklength;
+        dindexi = (i-1)*chunklength;
         result = 0;
 
-        result += stencil[1] * locald_struct->top_pad[j-extent+1];
-        result += stencil[3] * locald_struct->left_pad[i];
-        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-        result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-        result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+        result += stencil[0] * locald_struct->top_pad[j-1+1];
+        result += stencil[1] * locald_struct->left_pad[i];
+        result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+        result += stencil[3] * locald[dindexi+chunklength + (j-1+2)];
+        result += stencil[4] * locald[dindexi+chunklength+chunklength + (j-1+1)];
 
         localq[0] = result;
     }
 
-    //// Corner points: top-right corner (i==0, j==chunklength-extent)
-    j = chunklength - extent;
+    //// Corner points: top-right corner (i==0, j==chunklength-1)
+    j = chunklength - 1;
     if (locald_struct->top_pad != NULL && locald_struct->right_pad != NULL) {
         i = 0;
-        j = chunklength - extent;
-        dindexi = (i-extent)*chunklength;
+        j = chunklength - 1;
+        dindexi = (i-1)*chunklength;
         result = 0;
 
-        result += stencil[1] * locald_struct->top_pad[j-extent+1];
-        result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
-        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-        result += stencil[5] * locald_struct->right_pad[i];
-        result += stencil[7] * locald[dindexi+chunklength+chunklength + (j-extent+1)];
+        result += stencil[0] * locald_struct->top_pad[j-1+1];
+        result += stencil[1] * locald[dindexi+chunklength + (j-1)];
+        result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+        result += stencil[3] * locald_struct->right_pad[i];
+        result += stencil[4] * locald[dindexi+chunklength+chunklength + (j-1+1)];
 
         localq[j] = result;
     }
 
-    //// Corner points: bottom-left corner (i==chunklength-extent, j==0)
+    //// Corner points: bottom-left corner (i==chunklength-1, j==0)
     if (locald_struct->left_pad != NULL && locald_struct->bottom_pad != NULL) {
-        i = chunklength - extent;
+        i = chunklength - 1;
         j = 0;
-        dindexi = (i-extent)*chunklength;
+        dindexi = (i-1)*chunklength;
         result = 0;
 
-        result += stencil[1] * locald[dindexi + (j-extent+1)];
-        result += stencil[3] * locald_struct->left_pad[i];
-        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-        result += stencil[5] * locald[dindexi+chunklength + (j-extent+2)];
-        result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
+        result += stencil[0] * locald[dindexi + (j-1+1)];
+        result += stencil[1] * locald_struct->left_pad[i];
+        result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+        result += stencil[3] * locald[dindexi+chunklength + (j-1+2)];
+        result += stencil[4] * locald_struct->bottom_pad[j-1+1];
 
         localq[dindexi+chunklength] = result;
     }
 
-    //// Corner points: bottom-right corner (i==chunklength-extent, j==chunklength-extent)
+    //// Corner points: bottom-right corner (i==chunklength-1, j==chunklength-1)
     if (locald_struct->bottom_pad != NULL && locald_struct->right_pad != NULL) {
-        i = chunklength - extent;
-        j = chunklength - extent;
-        dindexi = (i-extent)*chunklength;
+        i = chunklength - 1;
+        j = chunklength - 1;
+        dindexi = (i-1)*chunklength;
         result = 0;
 
-        result += stencil[1] * locald[dindexi + (j-extent+1)];
-        result += stencil[3] * locald[dindexi+chunklength + (j-extent)];
-        result += stencil[4] * locald[dindexi+chunklength + (j-extent+1)];
-        result += stencil[5] * locald_struct->right_pad[i];
-        result += stencil[7] * locald_struct->bottom_pad[j-extent+1];
+        result += stencil[0] * locald[dindexi + (j-1+1)];
+        result += stencil[1] * locald[dindexi+chunklength + (j-1)];
+        result += stencil[2] * locald[dindexi+chunklength + (j-1+1)];
+        result += stencil[3] * locald_struct->right_pad[i];
+        result += stencil[4] * locald_struct->bottom_pad[j-1+1];
 
         localq[dindexi+chunklength + j] = result;
     }
@@ -424,8 +419,7 @@ MPI_Settings* init_mpi_settings(int numprocs, int chunklength) {
     return mpi_settings;
 }
 
-void free_struct_elems(stencil_struct* restrict stencil, d_struct* restrict locald, MPI_Settings* restrict mpi_settings) {
-    free(stencil->stencil);
+void free_struct_elems(d_struct* restrict locald, MPI_Settings* restrict mpi_settings) {
 
     free(locald->left_pad);
     free(locald->top_pad);

@@ -35,15 +35,8 @@ int main(int argc, char **argv) {
     // MPI communication in a compact manner.
     MPI_Settings* restrict mpi_settings = init_mpi_settings(numprocs, chunklength);
 
-    // Initialize stencil.
-    int my_stencil[9] = {0, -1, 0, -1, 4, -1, 0, -1, 0};
-    stencil_struct* restrict stencil = (stencil_struct*) malloc(sizeof(stencil));
-    stencil->size = 3;
-    stencil->extent = stencil->size/2;
-    stencil->stencil = (int*) malloc(stencil->size*stencil->size*sizeof(int));
-    memcpy(stencil->stencil, my_stencil, sizeof(my_stencil));
-
-    // Initialize local arrays.
+    // Initialize stencil and local arrays.
+    int stencil[5] = {-1, -1, 4, -1, -1};
     d_struct* locald_struct = init_locald(n, chunklength, rank, mpi_settings);
     double* restrict locald = locald_struct->locald;
     double* restrict localg = init_localg(chunklength, locald);
@@ -175,9 +168,10 @@ int main(int argc, char **argv) {
     free(localu);
     free(localg);
     free(localq);
-    free_struct_elems(stencil, locald_struct, mpi_settings);
+    //free_struct_elems(stencil, locald_struct, mpi_settings);
+    free_struct_elems(locald_struct, mpi_settings);
     free(locald_struct);
-    free(stencil);
+    //free(stencil);
     free(mpi_settings);
     MPI_Finalize();
 
