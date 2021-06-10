@@ -19,12 +19,12 @@ typedef struct my_MPI_Settings {
     int rightrank;
     int* restrict itags;
     int* restrict jtags;
+    MPI_Comm cartcomm;
+    MPI_Datatype rowtype;
+    MPI_Datatype coltype;
     MPI_Request* restrict irequests;
     MPI_Request* restrict jrequests;
     MPI_Status status;
-    MPI_Datatype rowtype;
-    MPI_Datatype coltype;
-    MPI_Comm cartcomm;
 } MPI_Settings;
 
 void apply_stencil_serial(int n, int* restrict stencil, double* restrict d, double* restrict q);

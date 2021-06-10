@@ -159,19 +159,17 @@ int main(int argc, char **argv) {
     MPI_Reduce(&runtime, &max_runtime, 1, MPI_DOUBLE, MPI_MAX, 0, mpi_settings->cartcomm);
     //print_local2dmesh(chunklength, chunklength, localu, rank, mpi_settings->cartcomm);
 
-    // Output: norm(g) = sqrt( dot(g,g) )
+    // Output: norm(g)^2 = dot(g,g) = q0 at the last iteration.
     if (rank==0) {
-        printf("[INFO] norm_g^2 = %.16lf\n", q1);
+        printf("[INFO] norm(g)^2 = %.16lf\n", q0);
         printf("%.16lf\n", max_runtime);
     }
 
     free(localu);
     free(localg);
     free(localq);
-    //free_struct_elems(stencil, locald_struct, mpi_settings);
     free_struct_elems(locald_struct, mpi_settings);
     free(locald_struct);
-    //free(stencil);
     free(mpi_settings);
     MPI_Finalize();
 
