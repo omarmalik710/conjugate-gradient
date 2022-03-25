@@ -1,2 +1,2 @@
 # conjugate-gradient
-Parallel implementation of the conjugate gradient method using MPI
+Project done during the course "Parallel and Distributed Programming" at Uppsala University. Parallel implementation of the conjugate gradient method using MPI.
